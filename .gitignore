@@ -6,3 +6,5 @@ venv/
 .DS_Store
 *.log
 out.json
+.gitignore
+INSTRUKCJE.md
