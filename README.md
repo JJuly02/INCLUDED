@@ -9,6 +9,15 @@ variants). For use **only against authorized targets**
 
 ## Installation
 ```bash
+./install.sh
+```
+Uses `pipx` if you have it, otherwise sets up a local `.venv/` — either
+way it ends with a working `included` command.
+
+<details>
+<summary>Manual install</summary>
+
+```bash
 # option A: as a CLI command
 pipx install .          # or: pip install .
 included --help
@@ -17,6 +26,7 @@ included --help
 pip install -r requirements.txt
 PYTHONPATH=src python3 -m included --help
 ```
+</details>
 
 ## Usage
 The `INCLUDE` marker in the URL marks the injection point (like `FUZZ` in ffuf):

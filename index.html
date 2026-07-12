@@ -319,13 +319,11 @@
 
   <section id="install">
     <h2>Installation</h2>
-    <pre><code><span class="comment"># as a CLI command</span>
-pipx install .
-included --help
-
-<span class="comment"># or run in place, no install</span>
-pip install -r requirements.txt
-python3 -m included --help</code></pre>
+    <pre><code><span class="comment"># clone, then let the script figure out pipx vs a local venv</span>
+git clone https://github.com/JJuly02/INCLUDED.git
+cd INCLUDED
+./install.sh
+included --help</code></pre>
   </section>
 
   <section id="usage">
