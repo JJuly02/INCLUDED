@@ -30,18 +30,19 @@ python3 -m included -w "http://host/img.php?p=INCLUDE" -fs 0 -mc 200 -o out.json
 ```
 
 ## Modules
-| module       | group | what it does                                        |
-|--------------|-------|------------------------------------------------------|
-| `traversal`  | read  | ../ + bypasses (`....//`, `..././`, prefixes, encoding)|
-| `filter_read`| read  | `php://filter` — dumps source files as base64        |
-| `data`       | rce   | `data://` web shell (allow_url_include)               |
-| `input`      | rce   | `php://input` — web shell in POST body                |
-| `expect`     | rce   | `expect://` — direct command execution                |
-| `zip_phar`   | rce   | `zip://` / `phar://` from an uploaded archive (`--file`)|
-| `log_poison` | rce   | two-phase: poison access.log/session, then include    |
+| module             | group | what it does                                          |
+|--------------------|-------|--------------------------------------------------------|
+| `traversal`        | read  | ../ + bypasses (`....//`, `..././`, prefixes, encoding)|
+| `filter_read`      | read  | `php://filter` — dumps source files as base64          |
+| `data`             | rce   | `data://` web shell (allow_url_include)                 |
+| `input`            | rce   | `php://input` — web shell in POST body                 |
+| `expect`           | rce   | `expect://` — direct command execution                 |
+| `zip_phar`         | rce   | `zip://` / `phar://` from an uploaded archive (`--file`)|
+| `log_poison`       | rce   | two-phase: poison access.log/session, then include      |
+| `filter_chain_rce` | rce   | `php://filter` chain — builds a PHP web shell in-flight, no file upload needed (adapted from [Synacktiv's technique](https://www.synacktiv.com/en/publications/php-filters-chain-what-is-it-and-how-to-use-it)); requires glibc `iconv` on the target (typical on Linux) |
 
 Profiles: `--profile read|rce|all`.
 
 ## Status
-Working skeleton. Still to do: filter-chain RCE generator (Synacktiv),
-RFI with auto-hosted shell, result dedup, wordlists from files.
+Working skeleton. Still to do: RFI with auto-hosted shell, wordlists from
+files, auto-detected traversal depth.
