@@ -2,7 +2,7 @@
 
 Kategorie:
   read  — odczyt plików/źródeł (traversal, filter_read)
-  rce   — wykonanie kodu (data, input, expect, zip_phar, log_poison, filter_chain_rce)
+  rce   — wykonanie kodu (data, input, expect, zip_phar, log_poison, filter_chain_rce, rfi)
 """
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from .wrappers import (
 )
 from .log_poison import LogPoisonModule
 from .filter_chain import FilterChainRCEModule
+from .rfi import RFIModule
 
 REGISTRY: dict[str, type[BaseModule]] = {
     m.name: m
@@ -26,13 +27,14 @@ REGISTRY: dict[str, type[BaseModule]] = {
         ZipPharModule,
         LogPoisonModule,
         FilterChainRCEModule,
+        RFIModule,
     )
 }
 
 # Grupy do szybkiego wyboru: --profile read / rce / all
 GROUPS: dict[str, list[str]] = {
     "read": ["traversal", "filter_read"],
-    "rce": ["data", "input", "expect", "zip_phar", "log_poison", "filter_chain_rce"],
+    "rce": ["data", "input", "expect", "zip_phar", "log_poison", "filter_chain_rce", "rfi"],
     "all": list(REGISTRY),
 }
 

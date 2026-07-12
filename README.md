@@ -40,9 +40,10 @@ python3 -m included -w "http://host/img.php?p=INCLUDE" -fs 0 -mc 200 -o out.json
 | `zip_phar`         | rce   | `zip://` / `phar://` from an uploaded archive (`--file`)|
 | `log_poison`       | rce   | two-phase: poison access.log/session, then include      |
 | `filter_chain_rce` | rce   | `php://filter` chain — builds a PHP web shell in-flight, no file upload needed (adapted from [Synacktiv's technique](https://www.synacktiv.com/en/publications/php-filters-chain-what-is-it-and-how-to-use-it)); requires glibc `iconv` on the target (typical on Linux) |
+| `rfi`              | rce   | Remote File Inclusion; with `--lhost/--lport` auto-hosts the web shell over HTTP for the target to fetch. `ftp://`/UNC payloads are generated too but need your own FTP/SMB server |
 
 Profiles: `--profile read|rce|all`.
 
 ## Status
-Working skeleton. Still to do: RFI with auto-hosted shell, wordlists from
-files, auto-detected traversal depth.
+Working skeleton. Still to do: wordlists from files, auto-detected
+traversal depth.
