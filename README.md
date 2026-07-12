@@ -15,7 +15,7 @@ included --help
 
 # option B: run in place, no install
 pip install -r requirements.txt
-python3 -m included --help   # run from the parent of this directory
+PYTHONPATH=src python3 -m included --help
 ```
 
 ## Usage

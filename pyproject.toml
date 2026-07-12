@@ -18,8 +18,10 @@ Repository = "https://github.com/JJuly02/INCLUDED"
 included = "included.cli:main"
 
 [tool.setuptools]
-packages = ["included", "included.modules"]
-package-dir = { "included" = ".", "included.modules" = "modules" }
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.setuptools.package-data]
 included = ["wordlists/*.txt"]
