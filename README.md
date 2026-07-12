@@ -9,7 +9,13 @@ variants). For use **only against authorized targets**
 
 ## Installation
 ```bash
+# option A: as a CLI command
+pipx install .          # or: pip install .
+included --help
+
+# option B: run in place, no install
 pip install -r requirements.txt
+python3 -m included --help   # run from the parent of this directory
 ```
 
 ## Usage
@@ -17,16 +23,16 @@ The `INCLUDE` marker in the URL marks the injection point (like `FUZZ` in ffuf):
 
 ```bash
 # basic scan with all modules
-python3 -m included -w "http://host/index.php?language=INCLUDE"
+included -w "http://host/index.php?language=INCLUDE"
 
 # target a specific file + verbose
-python3 -m included -w "http://host/?p=INCLUDE" -f /etc/passwd -v
+included -w "http://host/?p=INCLUDE" -f /etc/passwd -v
 
 # RCE techniques only, with a command and session (enables session poisoning)
-python3 -m included -w "http://host/?p=INCLUDE" --profile rce --cmd "id" -b PHPSESSID=abc123
+included -w "http://host/?p=INCLUDE" --profile rce --cmd "id" -b PHPSESSID=abc123
 
 # fuzzing with noise filtering, output to JSON
-python3 -m included -w "http://host/img.php?p=INCLUDE" -fs 0 -mc 200 -o out.json -of json
+included -w "http://host/img.php?p=INCLUDE" -fs 0 -mc 200 -o out.json -of json
 ```
 
 ## Modules
