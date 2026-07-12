@@ -60,6 +60,6 @@ permission to test is illegal in most jurisdictions. The authors take no
 responsibility for misuse.
 
 ## Status
-Working core with 9 modules (read + RCE), auto-hosted RFI, and a
-filter-chain RCE generator verified against a real glibc/PHP target.
-Still to do: package as a proper CLI entry point (`pipx install`).
+9 modules (read + RCE), auto-hosted RFI, and a filter-chain RCE generator,
+all verified against real PHP targets. Packaged with a `pipx`-installable
+console-script entry point.

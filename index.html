@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>INCLUDED — Modular LFI/RFI Scanner</title>
+<meta name="description" content="INCLUDED is a modular File Inclusion (LFI/RFI) scanner with modern techniques missing from older tools: filter chains, two-phase log/session poisoning, and filter bypass variants.">
+<style>
+  :root {
+    --bg: #0b0e0f;
+    --bg-raised: #12161a;
+    --border: #232a2f;
+    --text: #d7dde1;
+    --text-dim: #8a949c;
+    --accent: #35d488;
+    --accent-dim: #1f7a52;
+    --warn-bg: #241a12;
+    --warn-border: #6b4a1e;
+    --warn-text: #e8b166;
+    --code-bg: #101417;
+    --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --radius: 6px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { color-scheme: dark; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .wrap {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  header.hero {
+    border-bottom: 1px solid var(--border);
+    padding: 72px 0 48px;
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 0 0 16px;
+  }
+
+  h1 {
+    font-size: 44px;
+    line-height: 1.15;
+    margin: 0 0 12px;
+    letter-spacing: -0.02em;
+  }
+
+  .tagline {
+    font-family: var(--font-mono);
+    color: var(--text-dim);
+    font-size: 16px;
+    margin: 0 0 24px;
+  }
+
+  .lede {
+    font-size: 17px;
+    color: var(--text-dim);
+    max-width: 640px;
+    margin: 0 0 28px;
+  }
+
+  .cta-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    border: 1px solid var(--border);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #05130b;
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .btn-primary:hover { background: #4ee29a; text-decoration: none; }
+
+  .btn-ghost {
+    color: var(--text);
+    background: var(--bg-raised);
+  }
+  .btn-ghost:hover { border-color: var(--accent); text-decoration: none; }
+
+  section {
+    padding: 48px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  section:last-of-type { border-bottom: none; }
+
+  h2 {
+    font-size: 13px;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin: 0 0 24px;
+  }
+
+  .warning {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    color: var(--warn-text);
+    font-size: 15px;
+  }
+
+  .warning strong { color: #ffcf8a; }
+
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-size: 13.5px;
+  }
+
+  code {
+    font-family: var(--font-mono);
+  }
+
+  p code, li code, td code {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.9em;
+  }
+
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+  }
+
+  .comment { color: var(--text-dim); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14.5px;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  th {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    font-weight: 600;
+  }
+
+  td:first-child code {
+    color: var(--accent);
+  }
+
+  .group-tag {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .group-tag.rce { color: #ff9e7a; border-color: #5c3524; }
+  .group-tag.read { color: #7ac3ff; border-color: #244a5c; }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 620px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    h1 { font-size: 32px; }
+    header.hero { padding: 48px 0 32px; }
+  }
+
+  .card {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+  }
+
+  .card h3 {
+    margin: 0 0 8px;
+    font-size: 15.5px;
+  }
+
+  .card p {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 14.5px;
+  }
+
+  footer {
+    padding: 32px 0 64px;
+    color: var(--text-dim);
+    font-size: 13.5px;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  footer a { color: var(--text-dim); }
+  footer a:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Security research tool</p>
+    <h1>INCLUDED</h1>
+    <p class="tagline">you've been INCLUDED.</p>
+    <p class="lede">
+      A modular File Inclusion (LFI/RFI) scanner built around modern
+      exploitation techniques that older tools like LFISuite, liffy, and
+      kadimus never picked up — filter chains, two-phase log/session
+      poisoning, and a full set of filter bypass variants.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/JJuly02/INCLUDED">View on GitHub</a>
+      <a class="btn btn-ghost" href="#usage">Usage</a>
+      <a class="btn btn-ghost" href="#modules">Modules</a>
+    </div>
+  </header>
+
+  <section>
+    <div class="warning">
+      <strong>Authorized use only.</strong> This tool is built for HTB/CPTS
+      labs, CTFs, your own environments, and engagements you are explicitly
+      authorized to test. Running it against systems you do not own or do
+      not have written permission to test is illegal in most jurisdictions.
+    </div>
+  </section>
+
+  <section>
+    <h2>Why</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Modern technique coverage</h3>
+        <p>
+          A <code>php://filter</code> chain generator builds a PHP payload
+          byte-by-byte from an empty stream, giving RCE with no file upload
+          at all — a technique most existing LFI tools don't implement.
+        </p>
+      </div>
+      <div class="card">
+        <h3>ffuf-style ergonomics</h3>
+        <p>
+          One <code>INCLUDE</code> marker in the URL, match/filter flags
+          (<code>-mc</code>/<code>-fc</code>/<code>-ms</code>/<code>-fs</code>/<code>-mr</code>/<code>-fr</code>),
+          and profiles (<code>read</code>/<code>rce</code>/<code>all</code>)
+          for anyone used to ffuf or nmap.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Signal over noise</h3>
+        <p>
+          Results are deduplicated to the first confirmed hit per file, and
+          traversal depth is auto-detected instead of brute-forced —
+          measured 94% fewer requests for the same result.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Auto-hosted RFI</h3>
+        <p>
+          Point it at a target with <code>--lhost</code>/<code>--lport</code>
+          and it stands up a minimal HTTP server on the spot to serve the
+          web shell, no separate infrastructure required.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>Installation</h2>
+    <pre><code><span class="comment"># as a CLI command</span>
+pipx install .
+included --help
+
+<span class="comment"># or run in place, no install</span>
+pip install -r requirements.txt
+python3 -m included --help</code></pre>
+  </section>
+
+  <section id="usage">
+    <h2>Usage</h2>
+    <p style="color:var(--text-dim); margin-top:-8px;">
+      The <code>INCLUDE</code> marker in the URL marks the injection point,
+      the same way <code>FUZZ</code> works in ffuf.
+    </p>
+    <pre><code><span class="comment"># basic scan with all modules</span>
+included -w "http://host/index.php?language=INCLUDE"
+
+<span class="comment"># target a specific file, verbose output</span>
+included -w "http://host/?p=INCLUDE" -f /etc/passwd -v
+
+<span class="comment"># RCE techniques only, with a command and session</span>
+<span class="comment"># (a PHPSESSID cookie also enables session poisoning)</span>
+included -w "http://host/?p=INCLUDE" --profile rce --cmd "id" -b PHPSESSID=abc123
+
+<span class="comment"># fuzz, filter out noise, write results to JSON</span>
+included -w "http://host/img.php?p=INCLUDE" -fs 0 -mc 200 -o out.json -of json</code></pre>
+  </section>
+
+  <section id="modules">
+    <h2>Modules</h2>
+    <table>
+      <thead>
+        <tr><th>Module</th><th>Group</th><th>What it does</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>traversal</code></td>
+          <td><span class="group-tag read">read</span></td>
+          <td><code>../</code> plus filter bypasses (<code>....//</code>, <code>..././</code>, prefixes, encoding); traversal depth is auto-detected</td>
+        </tr>
+        <tr>
+          <td><code>filter_read</code></td>
+          <td><span class="group-tag read">read</span></td>
+          <td><code>php://filter</code> — dumps source files as base64</td>
+        </tr>
+        <tr>
+          <td><code>data</code></td>
+          <td><span class="group-tag rce">rce</span></td>
+          <td><code>data://</code> web shell (requires <code>allow_url_include</code>)</td>
+        </tr>
+        <tr>
+          <td><code>input</code></td>
+          <td><span class="group-tag rce">rce</span></td>
+          <td><code>php://input</code> — web shell in the POST body</td>
+        </tr>
+        <tr>
+          <td><code>expect</code></td>
+          <td><span class="group-tag rce">rce</span></td>
+          <td><code>expect://</code> — direct command execution</td>
+        </tr>
+        <tr>
+          <td><code>zip_phar</code></td>
+          <td><span class="group-tag rce">rce</span></td>
+          <td><code>zip://</code> / <code>phar://</code> from an uploaded archive (<code>--file</code>)</td>
+        </tr>
+        <tr>
+          <td><code>log_poison</code></td>
+          <td><span class="group-tag rce">rce</span></td>
+          <td>Two-phase: poison access.log or a PHP session, then include it</td>
+        </tr>
+        <tr>
+          <td><code>filter_chain_rce</code></td>
+          <td><span class="group-tag rce">rce</span></td>
+          <td>
+            <code>php://filter</code> chain — builds a PHP web shell in-flight with no
+            file upload at all, adapted from
+            <a href="https://www.synacktiv.com/en/publications/php-filters-chain-what-is-it-and-how-to-use-it">Synacktiv's technique</a>.
+            Requires glibc <code>iconv</code> on the target (typical on Linux).
+          </td>
+        </tr>
+        <tr>
+          <td><code>rfi</code></td>
+          <td><span class="group-tag rce">rce</span></td>
+          <td>
+            Remote File Inclusion; with <code>--lhost</code>/<code>--lport</code> it auto-hosts
+            the web shell over HTTP for the target to fetch. <code>ftp://</code> and UNC
+            payloads are generated too, but need your own FTP/SMB server.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="color:var(--text-dim); font-size:14.5px;">
+      Profiles group modules for quick selection: <code>--profile read|rce|all</code>.
+    </p>
+  </section>
+
+  <footer>
+    <span>Licensed under the Apache License 2.0.</span>
+    <span>
+      <a href="https://github.com/JJuly02/INCLUDED">github.com/JJuly02/INCLUDED</a>
+    </span>
+  </footer>
+</div>
+
+</body>
+</html>
