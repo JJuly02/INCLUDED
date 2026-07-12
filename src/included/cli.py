@@ -147,7 +147,7 @@ def _report(results: dict, cfg: Config) -> int:
             total += 1
             print(f"[+] {module:<12} — {f.signal}  (HTTP {f.status}, {f.length}B)")
             print(f"      payload : {f.payload}")
-            print(f"      dowód   : {f.evidence[:120]}")
+            print(f"      dowód   : {f.evidence[:400]}")
             lines.append({
                 "module": module, "signal": f.signal, "payload": f.payload,
                 "status": f.status, "length": f.length, "evidence": f.evidence,

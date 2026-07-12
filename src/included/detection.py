@@ -83,9 +83,17 @@ def check(resp: Response, mf: MatchFilter | None = None, *, expect_base64: bool 
     # Brak znanej sygnatury (np. dowolna treść jak /flag.txt), ale user jawnie
     # podał kryteria match/filter (np. -fs <rozmiar szumu>, ustalony jak w
     # ffuf) i ta odpowiedź je spełnia — traktuj to jako trafienie, tak samo
-    # jak ffuf pokazuje wszystko poza odfiltrowanym szumem.
-    if mf is not None and mf.has_criteria() and should_show(resp, mf):
-        evidence = resp.body[:150].replace("\n", "\\n")
+    # jak ffuf pokazuje wszystko poza odfiltrowanym szumem. Odpowiedzi błędu
+    # (4xx/5xx — np. 414 Request-URI Too Long, gdy payload jest za długi dla
+    # serwera) NIE liczą się same z siebie — to porażka requestu, nie sygnał —
+    # chyba że user jawnie chciał widzieć akurat ten kod przez -mc.
+    is_error_status = resp.status >= 400
+    explicitly_wanted = mf.match_codes and resp.status in mf.match_codes if mf else False
+    if (
+        mf is not None and mf.has_criteria() and should_show(resp, mf)
+        and (not is_error_status or explicitly_wanted)
+    ):
+        evidence = resp.body[:400].replace("\n", "\\n")
         return Finding(True, "match/filter", evidence, resp.payload, resp.status, resp.length)
 
     return Finding(False, "", "", resp.payload, resp.status, resp.length)
