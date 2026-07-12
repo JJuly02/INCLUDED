@@ -1,4 +1,4 @@
-"""Banner ASCII dla INCLUDED."""
+"""ASCII banner for INCLUDED."""
 from __future__ import annotations
 
 BANNER = r"""

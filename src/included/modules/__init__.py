@@ -1,8 +1,8 @@
-"""Rejestr modułów technik INCLUDED.
+"""Technique module registry for INCLUDED.
 
-Kategorie:
-  read  — odczyt plików/źródeł (traversal, filter_read)
-  rce   — wykonanie kodu (data, input, expect, zip_phar, log_poison, filter_chain_rce, rfi)
+Categories:
+  read  — file/source disclosure (traversal, filter_read)
+  rce   — code execution (data, input, expect, zip_phar, log_poison, filter_chain_rce, rfi)
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ REGISTRY: dict[str, type[BaseModule]] = {
     )
 }
 
-# Grupy do szybkiego wyboru: --profile read / rce / all
+# Quick-selection groups: --profile read / rce / all
 GROUPS: dict[str, list[str]] = {
     "read": ["traversal", "filter_read"],
     "rce": ["data", "input", "expect", "zip_phar", "log_poison", "filter_chain_rce", "rfi"],
@@ -45,6 +45,6 @@ def get_modules(names: list[str] | None) -> list[type[BaseModule]]:
     selected = []
     for n in names:
         if n not in REGISTRY:
-            raise KeyError(f"nieznany moduł: {n} (dostępne: {', '.join(REGISTRY)})")
+            raise KeyError(f"unknown module: {n} (available: {', '.join(REGISTRY)})")
         selected.append(REGISTRY[n])
     return selected

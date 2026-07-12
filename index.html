@@ -343,7 +343,15 @@ included -w "http://host/?p=INCLUDE" -f /etc/passwd -v
 included -w "http://host/?p=INCLUDE" --profile rce --cmd "id" -b PHPSESSID=abc123
 
 <span class="comment"># fuzz, filter out noise, write results to JSON</span>
-included -w "http://host/img.php?p=INCLUDE" -fs 0 -mc 200 -o out.json -of json</code></pre>
+included -w "http://host/img.php?p=INCLUDE" -fs 0 -mc 200 -o out.json -of json
+
+<span class="comment"># use an external wordlist, e.g. SecLists, instead of the bundled defaults</span>
+included -w "http://host/?view=INCLUDE" -W /usr/share/SecLists/Fuzzing/LFI/LFI-Jhaddix.txt -fs 1935</code></pre>
+    <p style="color:var(--text-dim); font-size:14.5px;">
+      Output stays quiet by default — confirmed findings and a summary
+      only. Each finding gets one isolated re-fetch after the main scan to
+      confirm it reproduces and to capture full evidence.
+    </p>
   </section>
 
   <section id="modules">

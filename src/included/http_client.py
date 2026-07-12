@@ -1,9 +1,9 @@
-"""Async klient HTTP dla INCLUDED.
+"""Async HTTP client for INCLUDED.
 
-  * wstrzykuje payload w miejsce markera INCLUDE (URL / param / body),
-  * obsługuje warianty enkodingu (url / double-url),
-  * współdzielona sesja + semafor współbieżności,
-  * zwraca znormalizowany Response dla detekcji.
+  * injects the payload in place of the INCLUDE marker (URL / param / body),
+  * handles encoding variants (url / double-url),
+  * shared session + concurrency semaphore,
+  * returns a normalized Response for detection.
 """
 from __future__ import annotations
 
@@ -28,14 +28,14 @@ class Response:
 
 
 def encode_payload(payload: str, enc: Encoding) -> str:
-    """Zwraca payload zakodowany wg wybranego wariantu."""
+    """Return the payload encoded per the selected variant."""
     if enc == Encoding.NONE:
         return payload
     if enc == Encoding.URL:
         return quote(payload, safe="")
     if enc == Encoding.DOUBLE_URL:
         return quote(quote(payload, safe=""), safe="")
-    return payload  # ALL rozbijamy wyżej na pojedyncze warianty
+    return payload  # ALL is fanned out into individual variants upstream
 
 
 class HttpClient:
@@ -71,12 +71,12 @@ class HttpClient:
 
     async def send(self, payload: str, *, encoding: Encoding | None = None,
                    extra_headers: dict[str, str] | None = None) -> Response:
-        """Wysyła jeden payload. encoding=None -> użyj domyślnego z configu.
+        """Send one payload. encoding=None -> use the config default.
 
-        extra_headers pozwala modułom (np. log poisoning) wstrzyknąć
-        payload w nagłówek zamiast w URL.
+        extra_headers lets modules (e.g. log poisoning) inject the payload
+        into a header instead of the URL.
         """
-        assert self._session is not None, "użyj klienta w 'async with'"
+        assert self._session is not None, "use the client inside 'async with'"
         enc = encoding if encoding is not None else self.cfg.encoding
         encoded = encode_payload(payload, enc)
         url, body = self._inject(encoded)

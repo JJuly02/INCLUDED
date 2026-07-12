@@ -1,5 +1,5 @@
-# Cele LFI dla Windows. Bez prefiksów ../ — te dokłada moduł traversal.
-# Jedna ścieżka na linię, # = komentarz.
+# Windows LFI targets. No ../ prefixes — the traversal module adds those.
+# One path per line, # = comment.
 
 C:/Windows/win.ini
 C:/Windows/system.ini
@@ -14,7 +14,7 @@ C:/Windows/php.ini
 C:/inetpub/wwwroot/web.config
 C:/inetpub/logs/LogFiles/W3SVC1/access.log
 
-# --- konfiguracja typowych stosów webowych na Windows (XAMPP/nginx) ---
+# --- common Windows web stack config (XAMPP/nginx) ---
 C:/xampp/apache/logs/access.log
 C:/xampp/apache/logs/error.log
 C:/xampp/php/php.ini

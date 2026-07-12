@@ -1,7 +1,7 @@
-"""Kontrakt modułu techniki dla INCLUDED.
+"""Technique module contract for INCLUDED.
 
-Nowa technika = podklasa BaseModule + wpis w rejestrze. Silnik nie zna
-szczegółów — pyta o payloady, wysyła, ocenia.
+A new technique = a BaseModule subclass + a registry entry. The engine
+doesn't know the details — it asks for payloads, sends them, evaluates.
 """
 from __future__ import annotations
 
@@ -15,8 +15,9 @@ from ..http_client import HttpClient, Response
 
 _WORDLIST_DIR = Path(__file__).resolve().parent.parent / "wordlists"
 
-# Awaryjne cele, gdyby wordlists/*.txt nie było w danej instalacji (np. paczka
-# bez plików danych) — normalnie DEFAULT_TARGETS ładuje się z tych plików.
+# Fallback targets in case wordlists/*.txt is missing from a given install
+# (e.g. a package without data files) — DEFAULT_TARGETS normally loads
+# from those files.
 _FALLBACK_TARGETS = {
     OSHint.LINUX: ["/etc/passwd", "/etc/shadow", "/etc/hosts",
                    "/proc/self/environ", "/var/www/html/config.php"],
@@ -34,8 +35,8 @@ def _load_wordlist(name: str, os_hint: OSHint) -> list[str]:
         return _FALLBACK_TARGETS[os_hint]
 
 
-# Domyślne cele per OS (gdy user nie podał -f/--file ani -W/--wordlist).
-# Ładowane z wordlists/linux.txt i wordlists/windows.txt.
+# Default targets per OS (when the user didn't pass -f/--file or -W/--wordlist).
+# Loaded from wordlists/linux.txt and wordlists/windows.txt.
 DEFAULT_TARGETS = {
     OSHint.LINUX: _load_wordlist("linux.txt", OSHint.LINUX),
     OSHint.WINDOWS: _load_wordlist("windows.txt", OSHint.WINDOWS),
@@ -46,12 +47,18 @@ class BaseModule(ABC):
     name: str = "base"
     description: str = ""
     expect_base64: bool = False
+    # Whether the post-scan verification pass (Engine._verify) can safely
+    # replay a finding with a plain client.send(payload). False for modules
+    # whose run() does something payloads() can't capture on its own (a
+    # POST body, extra headers, a hosted shell that's gone once run()
+    # returns) — see InputWrapperModule, LogPoisonModule, RFIModule.
+    verifiable: bool = True
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
 
     def targets(self) -> list[str]:
-        """Lista plików-celów. Priorytet: -f > -W > domyślne per OS."""
+        """List of target files. Priority: -f > -W > OS defaults."""
         if self.cfg.target_file:
             return [self.cfg.target_file]
         if self.cfg.wordlist:
@@ -74,10 +81,10 @@ class BaseModule(ABC):
         return check(resp, self.cfg.mf, expect_base64=self.expect_base64)
 
     def dedup(self, findings: list[Finding]) -> list[Finding]:
-        """Zostaw tylko pierwsze potwierdzenie per (sygnał, dowód) — ten sam
-        plik trafiony różnymi wariantami payloadu (głębokość/encoding/bypass)
-        daje identyczny dowód, więc to wystarcza jako klucz "ten sam plik".
-        Wyłączane przez --all-hits.
+        """Keep only the first confirmation per (signal, evidence) — the
+        same file hit by different payload variants (depth/encoding/bypass)
+        produces identical evidence, so that's enough to key "the same file".
+        Disabled by --all-hits.
         """
         if self.cfg.all_hits:
             return findings
