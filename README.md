@@ -9,10 +9,22 @@ variants). For use **only against authorized targets**
 
 ## Installation
 ```bash
-./install.sh
+git clone https://github.com/JJuly02/INCLUDED.git && cd INCLUDED && ./install.sh
 ```
 Uses `pipx` if you have it, otherwise sets up a local `.venv/` — either
 way it ends with a working `included` command.
+
+<details>
+<summary>No git on this box? (e.g. a locked-down pwnbox)</summary>
+
+```bash
+wget https://github.com/JJuly02/INCLUDED/archive/refs/heads/main.tar.gz
+tar xzf main.tar.gz
+cd INCLUDED-main
+./install.sh
+included --version
+```
+</details>
 
 <details>
 <summary>Manual install</summary>
