@@ -38,6 +38,25 @@ def encode_payload(payload: str, enc: Encoding) -> str:
     return payload  # ALL is fanned out into individual variants upstream
 
 
+def build_request(cfg: Config, payload: str, *, encoding: Encoding | None = None) -> tuple[str, str | None]:
+    """Build the (url, body) that sending this payload would produce.
+
+    Shared by HttpClient.send() and the CLI's reproduction ("curl this")
+    output, so the two never drift apart.
+    """
+    enc = encoding if encoding is not None else cfg.encoding
+    encoded = encode_payload(payload, enc)
+    url, body = cfg.url, cfg.data
+    if INCLUDE in url:
+        url = url.replace(INCLUDE, encoded)
+    elif cfg.param:
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}{cfg.param}={encoded}"
+    if body and INCLUDE in body:
+        body = body.replace(INCLUDE, encoded)
+    return url, body
+
+
 class HttpClient:
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -58,17 +77,6 @@ class HttpClient:
         if self._session:
             await self._session.close()
 
-    def _inject(self, encoded: str) -> tuple[str, str | None]:
-        url, body = self.cfg.url, self.cfg.data
-        if INCLUDE in url:
-            url = url.replace(INCLUDE, encoded)
-        elif self.cfg.param:
-            sep = "&" if "?" in url else "?"
-            url = f"{url}{sep}{self.cfg.param}={encoded}"
-        if body and INCLUDE in body:
-            body = body.replace(INCLUDE, encoded)
-        return url, body
-
     async def send(self, payload: str, *, encoding: Encoding | None = None,
                    extra_headers: dict[str, str] | None = None) -> Response:
         """Send one payload. encoding=None -> use the config default.
@@ -77,9 +85,7 @@ class HttpClient:
         into a header instead of the URL.
         """
         assert self._session is not None, "use the client inside 'async with'"
-        enc = encoding if encoding is not None else self.cfg.encoding
-        encoded = encode_payload(payload, enc)
-        url, body = self._inject(encoded)
+        url, body = build_request(self.cfg, payload, encoding=encoding)
 
         async with self._sem:
             try:

@@ -16,7 +16,9 @@ import sys
 from . import __version__
 from .banner import render
 from .config import Config, OSHint, Encoding, MatchFilter
+from .detection import Finding
 from .engine import Engine
+from .http_client import build_request
 from .modules import REGISTRY, GROUPS
 
 
@@ -139,9 +141,32 @@ def build_config(args) -> Config:
     )
 
 
+def _curl_repro(cfg: Config, f: Finding) -> str:
+    """Build a curl command that reproduces this finding's request.
+
+    Approximate for modules with a custom multi-step run() (input,
+    log_poison, rfi) — their payload string alone doesn't capture the
+    POST body swap / injected headers / hosted shell those use.
+    """
+    url, body = build_request(cfg, f.payload)
+    parts = ["curl", "-s"]
+    if cfg.method != "GET":
+        parts += ["-X", cfg.method]
+    for k, v in cfg.headers.items():
+        parts += ["-H", f"'{k}: {v}'"]
+    if cfg.cookies:
+        cookie_str = "; ".join(f"{k}={v}" for k, v in cfg.cookies.items())
+        parts += ["-b", f"'{cookie_str}'"]
+    if body:
+        parts += ["--data", f"'{body}'"]
+    parts.append(f'"{url}"')
+    return " ".join(parts)
+
+
 def _report(results: dict, cfg: Config) -> int:
     total = 0
     lines = []
+    reproducible: list[Finding] = []
     for module, findings in results.items():
         if not findings:
             if cfg.verbose:
@@ -152,11 +177,19 @@ def _report(results: dict, cfg: Config) -> int:
             print(f"[+] {module:<12} — {f.signal}  (HTTP {f.status}, {f.length}B)")
             print(f"      payload  : {f.payload}")
             print(f"      evidence : {f.evidence[:400]}")
+            if f.full_body is not None:
+                reproducible.append(f)
             lines.append({
                 "module": module, "signal": f.signal, "payload": f.payload,
                 "status": f.status, "length": f.length, "evidence": f.evidence,
             })
     print(f"\nSummary: {total} confirmed finding(s).")
+
+    if reproducible:
+        print("\nReproduce:")
+        for f in reproducible:
+            print(f"  {_curl_repro(cfg, f)}")
+            print(f"  {f.full_body}")
 
     if cfg.output:
         with open(cfg.output, "w", encoding="utf-8") as fh:

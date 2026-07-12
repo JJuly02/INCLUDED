@@ -66,5 +66,6 @@ class Engine:
                 refreshed = module.evaluate(resp)
                 if refreshed.confirmed:
                     refreshed.evidence = resp.body[:2000].replace("\n", "\\n")
+                    refreshed.full_body = resp.body
                     verified.append(refreshed)
             results[name] = verified

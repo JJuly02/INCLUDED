@@ -24,6 +24,10 @@ class Finding:
     payload: str
     status: int = 0
     length: int = 0
+    # Full response body, set only after the post-scan verification re-fetch
+    # (Engine._verify) — used for the CLI's "Reproduce" section so a real
+    # `curl` isn't needed to see the whole thing.
+    full_body: str | None = None
 
 
 # Marker injected into RCE payloads to unambiguously confirm execution.
