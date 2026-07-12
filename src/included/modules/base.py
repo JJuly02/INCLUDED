@@ -71,7 +71,7 @@ class BaseModule(ABC):
         raise NotImplementedError
 
     def evaluate(self, resp: Response) -> Finding:
-        return check(resp, expect_base64=self.expect_base64)
+        return check(resp, self.cfg.mf, expect_base64=self.expect_base64)
 
     def dedup(self, findings: list[Finding]) -> list[Finding]:
         """Zostaw tylko pierwsze potwierdzenie per (sygnał, dowód) — ten sam

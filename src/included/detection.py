@@ -61,7 +61,7 @@ def should_show(resp: Response, mf: MatchFilter) -> bool:
     return True
 
 
-def check(resp: Response, *, expect_base64: bool = False) -> Finding:
+def check(resp: Response, mf: MatchFilter | None = None, *, expect_base64: bool = False) -> Finding:
     """Ocena pojedynczej odpowiedzi pod kątem potwierdzonego trafienia."""
     if resp.error or not resp.body:
         return Finding(False, "", "", resp.payload, resp.status, resp.length)
@@ -79,6 +79,14 @@ def check(resp: Response, *, expect_base64: bool = False) -> Finding:
                 start = max(0, m.start() - 20)
                 evidence = hay[start:m.end() + 40].replace("\n", "\\n")
                 return Finding(True, name, evidence, resp.payload, resp.status, resp.length)
+
+    # Brak znanej sygnatury (np. dowolna treść jak /flag.txt), ale user jawnie
+    # podał kryteria match/filter (np. -fs <rozmiar szumu>, ustalony jak w
+    # ffuf) i ta odpowiedź je spełnia — traktuj to jako trafienie, tak samo
+    # jak ffuf pokazuje wszystko poza odfiltrowanym szumem.
+    if mf is not None and mf.has_criteria() and should_show(resp, mf):
+        evidence = resp.body[:150].replace("\n", "\\n")
+        return Finding(True, "match/filter", evidence, resp.payload, resp.status, resp.length)
 
     return Finding(False, "", "", resp.payload, resp.status, resp.length)
 

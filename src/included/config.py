@@ -41,6 +41,11 @@ class MatchFilter:
     match_regex: str | None = None           # -mr "root:.*:0:0"
     filter_regex: str | None = None          # -fr "not found"
 
+    def has_criteria(self) -> bool:
+        """Czy user jawnie podał choć jedno kryterium match/filter."""
+        return any((self.match_codes, self.filter_codes, self.match_size,
+                    self.filter_size, self.match_regex, self.filter_regex))
+
 
 @dataclass
 class Config:
