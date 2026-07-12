@@ -7,22 +7,38 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
+from pathlib import Path
 
 from ..config import Config, OSHint
 from ..detection import Finding, check, should_show
 from ..http_client import HttpClient, Response
 
+_WORDLIST_DIR = Path(__file__).resolve().parent.parent / "wordlists"
+
+# Awaryjne cele, gdyby wordlists/*.txt nie było w danej instalacji (np. paczka
+# bez plików danych) — normalnie DEFAULT_TARGETS ładuje się z tych plików.
+_FALLBACK_TARGETS = {
+    OSHint.LINUX: ["/etc/passwd", "/etc/shadow", "/etc/hosts",
+                   "/proc/self/environ", "/var/www/html/config.php"],
+    OSHint.WINDOWS: ["C:/Windows/win.ini", "C:/boot.ini",
+                     "C:/Windows/System32/drivers/etc/hosts"],
+}
+
+
+def _load_wordlist(name: str, os_hint: OSHint) -> list[str]:
+    try:
+        with (_WORDLIST_DIR / name).open(encoding="utf-8") as fh:
+            lines = [ln.strip() for ln in fh if ln.strip() and not ln.startswith("#")]
+        return lines or _FALLBACK_TARGETS[os_hint]
+    except OSError:
+        return _FALLBACK_TARGETS[os_hint]
+
+
 # Domyślne cele per OS (gdy user nie podał -f/--file ani -W/--wordlist).
+# Ładowane z wordlists/linux.txt i wordlists/windows.txt.
 DEFAULT_TARGETS = {
-    OSHint.LINUX: [
-        "/etc/passwd", "/etc/shadow", "/etc/hosts",
-        "/proc/self/environ", "/proc/self/cmdline",
-        "/var/www/html/config.php",
-    ],
-    OSHint.WINDOWS: [
-        "C:/Windows/win.ini", "C:/boot.ini",
-        "C:/Windows/System32/drivers/etc/hosts",
-    ],
+    OSHint.LINUX: _load_wordlist("linux.txt", OSHint.LINUX),
+    OSHint.WINDOWS: _load_wordlist("windows.txt", OSHint.WINDOWS),
 }
 
 
