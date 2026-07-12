@@ -10,6 +10,8 @@ one character to the stream) and the chain-building algorithm are adapted
 from Synacktiv's public tool, used here with attribution:
 https://github.com/synacktiv/php_filter_chain_generator
 (see also: https://www.synacktiv.com/en/publications/php-filters-chain-what-is-it-and-how-to-use-it)
+That upstream project carries no LICENSE file; see /NOTICE at the repo
+root for the full attribution and licensing discussion.
 
 Requires glibc iconv (typical on Linux/PHP containers) — on macOS/BSD
 iconv some charset names may not exist, so a chain generated here might

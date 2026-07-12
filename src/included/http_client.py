@@ -74,6 +74,13 @@ class HttpClient:
         self.cfg = cfg
         self._sem = asyncio.Semaphore(cfg.concurrency)
         self._session: aiohttp.ClientSession | None = None
+        # Global rate limit (--delay): a lock-serialized "earliest next send
+        # time" cursor, so the cap is on aggregate requests/sec regardless
+        # of --threads, not just a per-request sleep that concurrency would
+        # make meaningless (40 workers each sleeping 0.1s still fire ~40
+        # requests every 0.1s, not 1).
+        self._rate_lock = asyncio.Lock()
+        self._next_send_at = 0.0
 
     async def __aenter__(self) -> "HttpClient":
         connector = aiohttp.TCPConnector(ssl=self.cfg.verify_tls, limit=self.cfg.concurrency)
@@ -89,6 +96,18 @@ class HttpClient:
         if self._session:
             await self._session.close()
 
+    async def _throttle(self) -> None:
+        if self.cfg.delay <= 0:
+            return
+        async with self._rate_lock:
+            loop = asyncio.get_event_loop()
+            now = loop.time()
+            wait = self._next_send_at - now
+            if wait > 0:
+                await asyncio.sleep(wait)
+                now = self._next_send_at
+            self._next_send_at = now + self.cfg.delay
+
     async def send(self, payload: str, *, encoding: Encoding | None = None,
                    extra_headers: dict[str, str] | None = None) -> Response:
         """Send one payload. encoding=None -> use the config default.
@@ -99,6 +118,7 @@ class HttpClient:
         assert self._session is not None, "use the client inside 'async with'"
         url, body = build_request(self.cfg, payload, encoding=encoding)
 
+        await self._throttle()
         async with self._sem:
             try:
                 async with self._session.request(

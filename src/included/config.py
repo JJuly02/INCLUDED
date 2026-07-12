@@ -74,6 +74,7 @@ class Config:
     timeout: float = 10.0
     verify_tls: bool = False
     verbose: bool = False
+    delay: float = 0.0                        # --delay: min seconds between request starts (rate limit)
 
     # --- RCE / RFI (opt-in, need your own host/listener) ---
     cmd: str = "id"                           # command for web-shell/expect payloads

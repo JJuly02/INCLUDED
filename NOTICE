@@ -1,0 +1,34 @@
+INCLUDED
+Copyright 2026 the INCLUDED contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+================================================================================
+
+Third-party attribution: filter-chain conversion table (src/included/modules/filter_chain.py)
+
+The `filter_chain_rce` module adapts the conversion-chain algorithm and the
+base64-character-to-iconv-gadget lookup table from:
+
+    php_filter_chain_generator
+    https://github.com/synacktiv/php_filter_chain_generator
+    Copyright Synacktiv
+
+That upstream project does not carry a LICENSE file; under default copyright
+rules its code is "all rights reserved" by its authors, with no explicit
+license grant. It is, however, published research shared openly for security
+testing purposes and is widely referenced and reused in the security
+community (e.g. HackTricks and numerous other public writeups cite and
+reproduce the same technique and table).
+
+We use the table and algorithm here with explicit attribution (in the module
+docstring and this file), for the same authorized-security-testing purpose
+the original work was published for. We have not sought or received an
+explicit license grant from Synacktiv. If you are a Synacktiv maintainer and
+would like this handled differently (removal, a specific license, or
+different attribution), please open an issue on this repository.
+
+Independently reimplementing the underlying research (re-deriving the
+conversion table from scratch via the same brute-force search over iconv
+character sets) remains an option if a fully independent implementation is
+ever required.

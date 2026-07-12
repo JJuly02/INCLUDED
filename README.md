@@ -84,7 +84,9 @@ SecLists' own LFI wordlists, not just the bundled `linux.txt`/`windows.txt`.
 Profiles: `--profile read|rce|all`.
 
 ## Legal
-Licensed under [Apache License 2.0](LICENSE).
+Licensed under [Apache License 2.0](LICENSE). Third-party attribution
+(the `filter_chain_rce` conversion table, adapted from Synacktiv's
+research) is documented in [NOTICE](NOTICE).
 
 This tool is for **authorized security testing only** — HTB/CPTS labs,
 CTFs, your own environments, or engagements you're explicitly authorized

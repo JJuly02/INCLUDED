@@ -131,6 +131,9 @@ examples:
     io = p.add_argument_group("performance / output")
     io.add_argument("-t", "--threads", type=int, default=40, metavar="N",
                     help="concurrency")
+    io.add_argument("--delay", type=float, default=0.0, metavar="S",
+                    help="minimum seconds between request starts, across all threads "
+                         "(rate limit for fragile/shared targets; default: none)")
     io.add_argument("--timeout", type=float, default=10.0, metavar="S")
     io.add_argument("-v", "--verbose", action="store_true", help="show every request")
     io.add_argument("-o", "--output", metavar="FILE", help="write results to file")
@@ -153,7 +156,7 @@ def build_config(args) -> Config:
         target_file=args.file, wordlist=args.wordlist,
         headers=_parse_kv(args.header), cookies=_parse_kv(args.cookie), proxy=args.proxy,
         os_hint=OSHint(args.os), encoding=Encoding(args.encode),
-        max_depth=args.depth, concurrency=args.threads, timeout=args.timeout,
+        max_depth=args.depth, concurrency=args.threads, timeout=args.timeout, delay=args.delay,
         verbose=args.verbose, cmd=args.cmd, lhost=args.lhost, lport=args.lport,
         modules=modules,
         mf=MatchFilter(
