@@ -44,6 +44,16 @@ python3 -m included -w "http://host/img.php?p=INCLUDE" -fs 0 -mc 200 -o out.json
 
 Profiles: `--profile read|rce|all`.
 
+## Legal
+Licensed under [Apache License 2.0](LICENSE).
+
+This tool is for **authorized security testing only** — HTB/CPTS labs,
+CTFs, your own environments, or engagements you're explicitly authorized
+to test. Running it against systems you don't own or don't have written
+permission to test is illegal in most jurisdictions. The authors take no
+responsibility for misuse.
+
 ## Status
-Working skeleton. Still to do: wordlists from files, auto-detected
-traversal depth.
+Working core with 9 modules (read + RCE), auto-hosted RFI, and a
+filter-chain RCE generator verified against a real glibc/PHP target.
+Still to do: package as a proper CLI entry point (`pipx install`).
