@@ -12,7 +12,7 @@ import base64
 import re
 from dataclasses import dataclass
 
-from .config import MatchFilter
+from .config import Encoding, MatchFilter
 from .http_client import Response
 
 
@@ -28,6 +28,12 @@ class Finding:
     # (Engine._verify) — used for the CLI's "Reproduce" section so a real
     # `curl` isn't needed to see the whole thing.
     full_body: str | None = None
+    # The concrete encoding variant that actually produced this finding
+    # (relevant when --encode all fans out none/url/double per payload) —
+    # verification and the "Reproduce" curl command must replay this exact
+    # variant, not the config default, or they won't reproduce a finding
+    # that only works double-encoded.
+    encoding: Encoding = Encoding.NONE
 
 
 # Marker injected into RCE payloads to unambiguously confirm execution.

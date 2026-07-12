@@ -60,11 +60,12 @@ class Engine:
                 print(f"\n[*] verifying {len(findings)} finding(s) for {name}...")
             verified: list[Finding] = []
             for f in findings:
-                resp = await client.send(f.payload)
+                resp = await client.send(f.payload, encoding=f.encoding)
                 if self.cfg.verbose:
                     print(f"    [{resp.status}] {resp.length:>7}B  {f.payload[:80]}")
                 refreshed = module.evaluate(resp)
                 if refreshed.confirmed:
+                    refreshed.encoding = f.encoding
                     refreshed.evidence = resp.body[:2000].replace("\n", "\\n")
                     refreshed.full_body = resp.body
                     verified.append(refreshed)

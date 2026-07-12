@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from ..detection import Finding, should_show
+from ..detection import Finding
 from ..http_client import HttpClient
 from .base import BaseModule
 
@@ -50,12 +50,6 @@ class TraversalModule(BaseModule):
                 for seq in _SEQUENCES:
                     for depth in range(1, self.cfg.max_depth + 1):
                         yield prefix + seq * depth + rel
-
-    async def _send_eval(self, client: HttpClient, payload: str) -> Finding:
-        resp = await client.send(payload)
-        if self.cfg.verbose and should_show(resp, self.cfg.mf):
-            print(f"    [{resp.status}] {resp.length:>7}B  {payload[:80]}")
-        return self.evaluate(resp)
 
     async def run(self, client: HttpClient) -> list[Finding]:
         """Auto depth-detection: for each (target, prefix, sequence)

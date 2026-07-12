@@ -9,9 +9,12 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from pathlib import Path
 
-from ..config import Config, OSHint
+from ..config import Config, Encoding, OSHint
 from ..detection import Finding, check, should_show
 from ..http_client import HttpClient, Response
+
+# Concrete variants tried per payload when --encode all (the default) is set.
+_ALL_ENCODINGS = (Encoding.NONE, Encoding.URL, Encoding.DOUBLE_URL)
 
 _WORDLIST_DIR = Path(__file__).resolve().parent.parent / "wordlists"
 
@@ -98,13 +101,32 @@ class BaseModule(ABC):
             out.append(f)
         return out
 
+    async def _send_eval(self, client: HttpClient, payload: str) -> Finding:
+        """Send `payload`, trying every encoding variant when --encode all
+        is set (the default), stopping at the first confirmed one. Without
+        this, "all" was a silent no-op identical to "none" — a real
+        vulnerability that's only reachable double-encoded (e.g. a
+        blacklist bypassed by double-URL-encoding `../`) would never be
+        found even though the payload shape was right.
+        """
+        encodings = _ALL_ENCODINGS if self.cfg.encoding == Encoding.ALL else (self.cfg.encoding,)
+        last = Finding(False, "", "", payload)
+        for enc in encodings:
+            resp = await client.send(payload, encoding=enc)
+            if self.cfg.verbose and should_show(resp, self.cfg.mf):
+                tag = f" [{enc.value}]" if len(encodings) > 1 else ""
+                print(f"    [{resp.status}] {resp.length:>7}B  {payload[:80]}{tag}")
+            finding = self.evaluate(resp)
+            finding.encoding = enc
+            if finding.confirmed:
+                return finding
+            last = finding
+        return last
+
     async def run(self, client: HttpClient) -> list[Finding]:
         findings: list[Finding] = []
         for payload in self.payloads():
-            resp = await client.send(payload)
-            if self.cfg.verbose and should_show(resp, self.cfg.mf):
-                print(f"    [{resp.status}] {resp.length:>7}B  {payload[:80]}")
-            finding = self.evaluate(resp)
+            finding = await self._send_eval(client, payload)
             if finding.confirmed:
                 findings.append(finding)
         return self.dedup(findings)

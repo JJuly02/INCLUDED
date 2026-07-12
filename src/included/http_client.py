@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from urllib.parse import quote
 
 import aiohttp
 
@@ -27,14 +26,27 @@ class Response:
     error: str | None = None
 
 
+def _percent_encode_all(s: str) -> str:
+    """Percent-encode every byte, including '.', '-', '_', '~'.
+
+    Unlike urllib.parse.quote(), which always treats those four as
+    "unreserved" and leaves them alone no matter what `safe` is set to.
+    That's backwards for bypassing a naive input filter: a blacklist
+    checking for a literal '.' or '/' after one decode pass needs THOSE
+    exact characters hidden, and quote()-based double-encoding never hides
+    a dot at any depth (verified: quote(quote("../x")) still contains "..").
+    """
+    return "".join(f"%{b:02X}" for b in s.encode("utf-8"))
+
+
 def encode_payload(payload: str, enc: Encoding) -> str:
     """Return the payload encoded per the selected variant."""
     if enc == Encoding.NONE:
         return payload
     if enc == Encoding.URL:
-        return quote(payload, safe="")
+        return _percent_encode_all(payload)
     if enc == Encoding.DOUBLE_URL:
-        return quote(quote(payload, safe=""), safe="")
+        return _percent_encode_all(_percent_encode_all(payload))
     return payload  # ALL is fanned out into individual variants upstream
 
 

