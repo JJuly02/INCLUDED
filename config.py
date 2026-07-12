@@ -84,6 +84,7 @@ class Config:
     # --- output ---
     output: str | None = None                 # -o plik
     output_format: str = "text"               # -of text|json
+    all_hits: bool = False                    # --all-hits: wyłącz dedup per (moduł, sygnał, dowód)
 
     def target_summary(self) -> str:
         s = f"{self.method} {self.url}"

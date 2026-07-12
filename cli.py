@@ -108,6 +108,8 @@ def build_parser() -> argparse.ArgumentParser:
     io.add_argument("-v", "--verbose", action="store_true", help="pokaż każdy request")
     io.add_argument("-o", "--output", metavar="FILE", help="zapis wyników")
     io.add_argument("-of", "--output-format", choices=["text", "json"], default="text")
+    io.add_argument("--all-hits", action="store_true",
+                    help="wyłącz dedup — pokaż każde potwierdzone trafienie, nie tylko pierwsze per plik")
     io.add_argument("--no-banner", action="store_true")
     io.add_argument("--version", action="version", version=f"included {__version__}")
     return p
@@ -130,7 +132,7 @@ def build_config(args) -> Config:
             match_size=_int_set(args.ms), filter_size=_int_set(args.fs),
             match_regex=args.mr, filter_regex=args.fr,
         ),
-        output=args.output, output_format=args.output_format,
+        output=args.output, output_format=args.output_format, all_hits=args.all_hits,
     )
 
 

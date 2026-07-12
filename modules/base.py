@@ -57,6 +57,24 @@ class BaseModule(ABC):
     def evaluate(self, resp: Response) -> Finding:
         return check(resp, expect_base64=self.expect_base64)
 
+    def dedup(self, findings: list[Finding]) -> list[Finding]:
+        """Zostaw tylko pierwsze potwierdzenie per (sygnał, dowód) — ten sam
+        plik trafiony różnymi wariantami payloadu (głębokość/encoding/bypass)
+        daje identyczny dowód, więc to wystarcza jako klucz "ten sam plik".
+        Wyłączane przez --all-hits.
+        """
+        if self.cfg.all_hits:
+            return findings
+        seen: set[tuple[str, str]] = set()
+        out: list[Finding] = []
+        for f in findings:
+            key = (f.signal, f.evidence)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(f)
+        return out
+
     async def run(self, client: HttpClient) -> list[Finding]:
         findings: list[Finding] = []
         for payload in self.payloads():
@@ -66,4 +84,4 @@ class BaseModule(ABC):
             finding = self.evaluate(resp)
             if finding.confirmed:
                 findings.append(finding)
-        return findings
+        return self.dedup(findings)

@@ -72,7 +72,7 @@ class LogPoisonModule(BaseModule):
                 if f.confirmed:
                     findings.append(f)
 
-        return findings
+        return self.dedup(findings)
 
     def _candidate_logs(self) -> list[str]:
         if self.cfg.target_file:
