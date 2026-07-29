@@ -12,10 +12,12 @@ import argparse
 import asyncio
 import json
 import sys
+from dataclasses import replace
 
 from . import __version__
 from .banner import render
 from .config import Config, OSHint, Encoding, MatchFilter
+from .crawler import crawl
 from .detection import Finding
 from .engine import Engine
 from .http_client import build_request
@@ -52,6 +54,10 @@ The INCLUDE marker in the URL marks the injection point, e.g.
   -w "http://host/?page=INCLUDE"
 
 examples:
+  # auto-discover injection points from a site root (crawls links/forms,
+  # tests every query param and form field found; no INCLUDE needed here)
+  included -u "http://host/" -v
+
   # basic scan, all modules, default wordlist
   included -w "http://host/index.php?language=INCLUDE"
 
@@ -77,12 +83,23 @@ examples:
     )
     # --- target ---
     tgt = p.add_argument_group("target")
-    tgt.add_argument("-w", "--url", required=True, metavar="URL",
-                     help="target URL with the INCLUDE marker")
+    entry = tgt.add_mutually_exclusive_group(required=True)
+    entry.add_argument("-w", "--url", metavar="URL",
+                       help="target URL with the INCLUDE marker")
+    entry.add_argument("-u", "--crawl", metavar="URL",
+                       help="base URL to auto-crawl for injection points, instead of "
+                            "a hand-picked -w/--url (see 'crawl' group below)")
     tgt.add_argument("-p", "--param", metavar="NAME",
                      help="parameter to inject into (when the URL has no INCLUDE)")
     tgt.add_argument("-X", "--method", default="GET", metavar="M", help="HTTP method")
     tgt.add_argument("-d", "--data", metavar="BODY", help="POST body (may contain INCLUDE)")
+
+    # --- auto-discovery ---
+    cr = p.add_argument_group("crawl (with -u/--crawl)")
+    cr.add_argument("--crawl-depth", type=int, default=2, metavar="N",
+                    help="max link-following depth (default: 2)")
+    cr.add_argument("--crawl-pages", type=int, default=60, metavar="N",
+                    help="max pages to visit (default: 60)")
 
     # --- what to read ---
     rd = p.add_argument_group("read target")
@@ -151,8 +168,14 @@ def build_config(args) -> Config:
     modules = list(args.module)
     if args.profile:
         modules = GROUPS[args.profile]
+    elif args.crawl and not modules:
+        # Auto-discovery hits every parameter it finds — default to the
+        # quieter read-only profile unless the user explicitly asked for
+        # more (-m / --profile rce/all). RCE/log-poison/RFI payloads fired
+        # blind at every discovered field is too aggressive for a default.
+        modules = GROUPS["read"]
     return Config(
-        url=args.url, method=args.method.upper(), param=args.param, data=args.data,
+        url=args.url or args.crawl, method=args.method.upper(), param=args.param, data=args.data,
         target_file=args.file, wordlist=args.wordlist,
         headers=_parse_kv(args.header), cookies=_parse_kv(args.cookie), proxy=args.proxy,
         os_hint=OSHint(args.os), encoding=Encoding(args.encode),
@@ -191,7 +214,11 @@ def _curl_repro(cfg: Config, f: Finding) -> str:
     return " ".join(parts)
 
 
-def _report(results: dict, cfg: Config) -> int:
+def _print_results(results: dict, cfg: Config, *, label: str | None = None) -> tuple[int, list[dict]]:
+    """Print one target's results. Returns (finding count, JSON-line dicts)
+    so callers scanning multiple targets (run_crawl) can aggregate output
+    into a single -o write instead of one file per candidate.
+    """
     total = 0
     lines = []
     reproducible: list[Finding] = []
@@ -202,16 +229,19 @@ def _report(results: dict, cfg: Config) -> int:
             continue
         for f in findings:
             total += 1
-            print(f"[+] {module:<12} — {f.signal}  (HTTP {f.status}, {f.length}B)")
+            print(f"[+] {module:<12} — {f.signal}  (HTTP {f.status}, {f.length}B)"
+                  + (f"  [{label}]" if label else ""))
             print(f"      payload  : {f.payload}")
             print(f"      evidence : {f.evidence[:400]}")
             if f.full_body is not None:
                 reproducible.append(f)
-            lines.append({
+            line = {
                 "module": module, "signal": f.signal, "payload": f.payload,
                 "status": f.status, "length": f.length, "evidence": f.evidence,
-            })
-    print(f"\nSummary: {total} confirmed finding(s).")
+            }
+            if label:
+                line["target"] = label
+            lines.append(line)
 
     if reproducible:
         print("\nReproduce:")
@@ -219,14 +249,66 @@ def _report(results: dict, cfg: Config) -> int:
             print(f"  {_curl_repro(cfg, f)}")
             print(f"  {f.full_body}")
 
-    if cfg.output:
-        with open(cfg.output, "w", encoding="utf-8") as fh:
-            if cfg.output_format == "json":
-                json.dump(lines, fh, ensure_ascii=False, indent=2)
-            else:
-                for l in lines:
-                    fh.write(f"[{l['module']}] {l['signal']} :: {l['payload']}\n")
-        print(f"[*] Written to {cfg.output} ({cfg.output_format})")
+    return total, lines
+
+
+def _write_output(cfg: Config, lines: list[dict]) -> None:
+    if not cfg.output:
+        return
+    with open(cfg.output, "w", encoding="utf-8") as fh:
+        if cfg.output_format == "json":
+            json.dump(lines, fh, ensure_ascii=False, indent=2)
+        else:
+            for l in lines:
+                prefix = f"[{l['target']}] " if "target" in l else ""
+                fh.write(f"{prefix}[{l['module']}] {l['signal']} :: {l['payload']}\n")
+    print(f"[*] Written to {cfg.output} ({cfg.output_format})")
+
+
+def _report(results: dict, cfg: Config) -> int:
+    total, lines = _print_results(results, cfg)
+    print(f"\nSummary: {total} confirmed finding(s).")
+    _write_output(cfg, lines)
+    return 0
+
+
+async def _run_crawl(args, cfg: Config) -> int:
+    active = cfg.modules or list(REGISTRY)
+    print(f"[*] Crawling {args.crawl} (depth={args.crawl_depth}, max pages={args.crawl_pages})...")
+    if cfg.verbose:
+        print(f"[*] Modules: {', '.join(active)}")
+    candidates = await crawl(cfg, args.crawl, max_depth=args.crawl_depth,
+                             max_pages=args.crawl_pages, verbose=cfg.verbose)
+    if not candidates:
+        print("[!] No candidate injection points found (no query params or form fields discovered).")
+        return 0
+
+    print(f"\n[*] Discovered {len(candidates)} candidate injection point(s):")
+    for c in candidates:
+        print(f"    {c.label()}  (via {c.source})")
+
+    total_findings = 0
+    vulnerable = 0
+    all_lines: list[dict] = []
+    for c in candidates:
+        cand_cfg = replace(cfg, url=c.url, method=c.method, data=c.data, param=None)
+        print(f"\n[*] Scanning {c.label()} ...")
+        try:
+            results = await Engine(cand_cfg).run()
+        except KeyboardInterrupt:
+            raise
+        except Exception as exc:
+            print(f"[!] error scanning {c.label()}: {exc}")
+            continue
+        count, lines = _print_results(results, cand_cfg, label=c.label())
+        total_findings += count
+        if count:
+            vulnerable += 1
+        all_lines.extend(lines)
+
+    print(f"\nSummary: {vulnerable}/{len(candidates)} candidate(s) vulnerable, "
+          f"{total_findings} confirmed finding(s) total.")
+    _write_output(cfg, all_lines)
     return 0
 
 
@@ -235,6 +317,14 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_banner:
         print(render(__version__))
     cfg = build_config(args)
+
+    if args.crawl:
+        try:
+            return asyncio.run(_run_crawl(args, cfg))
+        except KeyboardInterrupt:
+            print("\n[!] Interrupted.", file=sys.stderr)
+            return 130
+
     active = cfg.modules or list(REGISTRY)
     print(f"[*] Target : {cfg.target_summary()}")
     if cfg.verbose:

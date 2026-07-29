@@ -68,6 +68,25 @@ to capture the full response as evidence — disable with `--no-verify`.
 `-W/--wordlist` accepts any plain text file, one path per line — including
 SecLists' own LFI wordlists, not just the bundled `linux.txt`/`windows.txt`.
 
+### Auto-discovery (crawl mode)
+Don't have an injection point yet? Point `-u/--crawl` at a site root instead
+of `-w`, and INCLUDED will crawl same-origin links/forms, extract every
+query parameter and form field it finds, and scan each one — no `INCLUDE`
+marker needed up front:
+
+```bash
+# discover candidate injection points and scan each of them
+included -u "http://host/" -v
+
+# limit crawl size, then go after RCE on whatever was found
+included -u "http://host/" --crawl-depth 3 --crawl-pages 100 --profile rce --cmd id
+```
+
+Crawl mode defaults to the `read` profile (safer for a first, unattended
+pass over every discovered field) — pass `-m`/`--profile` to override.
+File-upload (`type="file"`) form fields are skipped. Crawling never leaves
+the target's origin.
+
 ## Modules
 | module             | group | what it does                                          |
 |--------------------|-------|--------------------------------------------------------|
@@ -95,6 +114,6 @@ permission to test is illegal in most jurisdictions. The authors take no
 responsibility for misuse.
 
 ## Status
-9 modules (read + RCE), auto-hosted RFI, and a filter-chain RCE generator,
-all verified against real PHP targets. Packaged with a `pipx`-installable
-console-script entry point.
+9 modules (read + RCE), auto-hosted RFI, a filter-chain RCE generator, and
+an auto-discovery crawl mode, all verified against real PHP targets.
+Packaged with a `pipx`-installable console-script entry point.
