@@ -16,6 +16,7 @@ from dataclasses import replace
 
 from . import __version__
 from .banner import render
+from .chain import run_upload_chains
 from .config import Config, OSHint, Encoding, MatchFilter
 from .crawler import crawl
 from .detection import Finding
@@ -100,6 +101,14 @@ examples:
                     help="max link-following depth (default: 2)")
     cr.add_argument("--crawl-pages", type=int, default=60, metavar="N",
                     help="max pages to visit (default: 60)")
+    cr.add_argument("--no-fuzz-params", action="store_true",
+                    help="don't try common hidden param names (region, lang, page, ...) "
+                         "on every crawled page — only test params already visible in links")
+    cr.add_argument("--params-wordlist", metavar="FILE",
+                    help="override the bundled hidden-param wordlist")
+    cr.add_argument("--no-upload-chain", action="store_true",
+                    help="don't try the upload -> guess-filename -> trigger-RCE chain "
+                         "when a file-upload form is found")
 
     # --- what to read ---
     rd = p.add_argument_group("read target")
@@ -277,8 +286,11 @@ async def _run_crawl(args, cfg: Config) -> int:
     print(f"[*] Crawling {args.crawl} (depth={args.crawl_depth}, max pages={args.crawl_pages})...")
     if cfg.verbose:
         print(f"[*] Modules: {', '.join(active)}")
-    candidates = await crawl(cfg, args.crawl, max_depth=args.crawl_depth,
-                             max_pages=args.crawl_pages, verbose=cfg.verbose)
+    candidates, upload_forms = await crawl(
+        cfg, args.crawl, max_depth=args.crawl_depth, max_pages=args.crawl_pages,
+        verbose=cfg.verbose, fuzz_params=not args.no_fuzz_params,
+        params_wordlist=args.params_wordlist,
+    )
     if not candidates:
         print("[!] No candidate injection points found (no query params or form fields discovered).")
         return 0
@@ -286,6 +298,10 @@ async def _run_crawl(args, cfg: Config) -> int:
     print(f"\n[*] Discovered {len(candidates)} candidate injection point(s):")
     for c in candidates:
         print(f"    {c.label()}  (via {c.source})")
+    if upload_forms:
+        print(f"[*] Discovered {len(upload_forms)} file-upload form(s):")
+        for uf in upload_forms:
+            print(f"    {uf.method:<4} {uf.url}  (field={uf.file_field})")
 
     total_findings = 0
     vulnerable = 0
@@ -306,8 +322,33 @@ async def _run_crawl(args, cfg: Config) -> int:
             vulnerable += 1
         all_lines.extend(lines)
 
-    print(f"\nSummary: {vulnerable}/{len(candidates)} candidate(s) vulnerable, "
-          f"{total_findings} confirmed finding(s) total.")
+    if upload_forms and not args.no_upload_chain:
+        print(f"\n[*] Trying upload -> guess -> RCE chain "
+              f"({len(upload_forms)} upload form(s), {len(candidates)} other candidate(s))...")
+        try:
+            chain_hits = await run_upload_chains(cfg, upload_forms, candidates, verbose=cfg.verbose)
+        except KeyboardInterrupt:
+            raise
+        except Exception as exc:
+            print(f"[!] error in upload chain: {exc}")
+            chain_hits = []
+        for hit in chain_hits:
+            f = hit.finding
+            print(f"[+] upload-chain — {f.signal}  (HTTP {f.status}, {f.length}B)  [{hit.label()}]")
+            print(f"      evidence : {f.evidence[:400]}")
+            total_findings += 1
+            all_lines.append({
+                "module": "upload_chain", "signal": f.signal, "payload": f.payload,
+                "status": f.status, "length": f.length, "evidence": f.evidence,
+                "target": hit.label(),
+            })
+        if not chain_hits:
+            print("[ ] upload_chain  — no confirmed findings")
+
+    summary = f"\nSummary: {vulnerable}/{len(candidates)} candidate(s) vulnerable"
+    if upload_forms and not args.no_upload_chain:
+        summary += f", upload-chain {'confirmed RCE' if chain_hits else 'found nothing'}"
+    print(f"{summary}, {total_findings} confirmed finding(s) total.")
     _write_output(cfg, all_lines)
     return 0
 

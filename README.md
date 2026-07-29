@@ -84,8 +84,31 @@ included -u "http://host/" --crawl-depth 3 --crawl-pages 100 --profile rce --cmd
 
 Crawl mode defaults to the `read` profile (safer for a first, unattended
 pass over every discovered field) — pass `-m`/`--profile` to override.
-File-upload (`type="file"`) form fields are skipped. Crawling never leaves
-the target's origin.
+Crawling never leaves the target's origin.
+
+Two extra things happen automatically in crawl mode, both closing the same
+gap: some injection points and upload sinks are never linked anywhere, only
+present in server-side code.
+
+- **Hidden parameter fuzzing.** Every crawled page also gets tried against a
+  small bundled wordlist of common LFI-relevant param names (`region`,
+  `lang`, `page`, `template`, ...) — not just params already visible in
+  links. Disable with `--no-fuzz-params`, or point `--params-wordlist FILE`
+  at a bigger list. This is a real cost multiplier (pages × names × a full
+  module sweep each) — on a slow/fragile target it can dominate the run
+  time; narrow the bundled list or disable it if a scan is taking too long.
+- **Upload → guess → RCE chain.** If a file-upload form is found, INCLUDED
+  uploads a small PHP web shell through it, guesses where it landed using
+  common storage conventions (`uploads/`, `md5(content)`, `sha1(content)`,
+  the original filename), and tries including each guess through every
+  other discovered injection point — reusing the existing traversal sweep,
+  so the same double-URL-encoding blacklist bypass applies here too.
+  Disable with `--no-upload-chain`.
+
+```bash
+# skip hidden-param fuzzing and the upload chain, just scan visible params
+included -u "http://host/" --no-fuzz-params --no-upload-chain -v
+```
 
 ## Modules
 | module             | group | what it does                                          |

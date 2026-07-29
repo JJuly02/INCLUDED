@@ -8,8 +8,9 @@ the rest of the project already relies on exclusively.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from html.parser import HTMLParser
+from pathlib import Path
 from urllib.parse import parse_qsl, urljoin, urlsplit, urlunsplit
 
 import aiohttp
@@ -27,7 +28,21 @@ _STATIC_EXTS = (
 # the kind of endpoint LFI hides behind, even though we never crawl *into*
 # an image response.
 _CANDIDATE_ATTRS = {"a": "href", "img": "src", "script": "src", "link": "href", "iframe": "src"}
-_SKIP_INPUT_TYPES = {"file", "submit", "button", "image", "reset"}
+_SKIP_INPUT_TYPES = {"submit", "button", "image", "reset"}
+
+_WORDLIST_DIR = Path(__file__).resolve().parent / "wordlists"
+
+
+def _load_params_wordlist(path: str | None) -> list[str]:
+    """Hidden-param names to fuzz on every crawled page. --params-wordlist
+    overrides the small bundled default (see wordlists/params.txt for why
+    it's kept short: it's a multiplier on total crawl requests)."""
+    target = Path(path) if path else _WORDLIST_DIR / "params.txt"
+    try:
+        with target.open(encoding="utf-8") as fh:
+            return [ln.strip() for ln in fh if ln.strip() and not ln.startswith("#")]
+    except OSError:
+        return []
 
 
 @dataclass(frozen=True)
@@ -45,9 +60,21 @@ class Candidate:
         return f"{self.method:<4} {path}  param={self.param}"
 
 
+@dataclass(frozen=True)
+class UploadForm:
+    """A form with a file input — a candidate target for the upload ->
+    guess-filename -> trigger-RCE chain (chain.py), kept separate from
+    Candidate since "upload a file here" isn't "inject INCLUDE here"."""
+    url: str
+    method: str
+    file_field: str
+    other_fields: list[tuple[str, str]] = field(default_factory=list)
+
+
 class _PageParser(HTMLParser):
     """One pass over an HTML page: same-page links to follow, query-bearing
-    URLs as candidates, and <form> method/action/fields."""
+    URLs as candidates, and <form> method/action/fields (including which
+    form has a file input, tracked separately for the upload chain)."""
 
     def __init__(self, base_url: str):
         super().__init__(convert_charrefs=True)
@@ -65,14 +92,20 @@ class _PageParser(HTMLParser):
                 "url": urljoin(self.base_url, action),
                 "method": (a.get("method") or "GET").upper(),
                 "fields": [],
+                "file_field": None,
             }
             self.forms.append(self._form)
             return
         if tag in ("input", "textarea", "select") and self._form is not None:
             name = a.get("name")
             itype = (a.get("type") or "text").lower()
-            if name and itype not in _SKIP_INPUT_TYPES:
-                self._form["fields"].append((name, a.get("value") or ""))
+            if not name or itype in _SKIP_INPUT_TYPES:
+                return
+            if itype == "file":
+                if self._form["file_field"] is None:
+                    self._form["file_field"] = name
+                return
+            self._form["fields"].append((name, a.get("value") or ""))
             return
         attr = _CANDIDATE_ATTRS.get(tag)
         if attr and a.get(attr):
@@ -114,8 +147,8 @@ def _query_candidates(url: str) -> list[Candidate]:
 
 
 def _form_candidates(form: dict) -> list[Candidate]:
-    """One candidate per form field, that field set to INCLUDE, the rest
-    filled with their default value (or a harmless placeholder)."""
+    """One candidate per (non-file) form field, that field set to INCLUDE,
+    the rest filled with their default value (or a harmless placeholder)."""
     fields = form["fields"]
     out = []
     for i, (name, _) in enumerate(fields):
@@ -130,9 +163,30 @@ def _form_candidates(form: dict) -> list[Candidate]:
     return out
 
 
+def _param_fuzz_candidates(url: str, param_names: list[str]) -> list[Candidate]:
+    """One candidate per wordlist param name NOT already present on this
+    page's URL — finds injection points that exist in server code but
+    were never linked anywhere (e.g. a `region` param only visible by
+    reading source, not by crawling)."""
+    parts = urlsplit(url)
+    existing = {k for k, _ in parse_qsl(parts.query, keep_blank_values=True)}
+    out = []
+    for name in param_names:
+        if name in existing:
+            continue
+        sep = "&" if parts.query else ""
+        query = f"{parts.query}{sep}{name}={INCLUDE}"
+        target = urlunsplit((parts.scheme, parts.netloc, parts.path, query, ""))
+        out.append(Candidate(url=target, method="GET", data=None, param=name, source="param-fuzz"))
+    return out
+
+
 async def crawl(cfg: Config, start_url: str, *, max_depth: int, max_pages: int,
-                 verbose: bool = False) -> list[Candidate]:
-    """BFS same-origin crawl from start_url, returning deduped candidates.
+                 verbose: bool = False, fuzz_params: bool = True,
+                 params_wordlist: str | None = None,
+                 ) -> tuple[list[Candidate], list[UploadForm]]:
+    """BFS same-origin crawl from start_url, returning deduped candidates
+    plus any discovered file-upload forms.
 
     Only follows <a href> links (real pages); every href/src/action seen
     anywhere is still checked for a candidate query string, since a lot of
@@ -141,7 +195,9 @@ async def crawl(cfg: Config, start_url: str, *, max_depth: int, max_pages: int,
     """
     visited: set[str] = set()
     candidates: dict[tuple[str, str, str], Candidate] = {}
+    upload_forms: dict[tuple[str, str, str], UploadForm] = {}
     queue: list[tuple[str, int]] = [(start_url, 0)]
+    param_names = _load_params_wordlist(params_wordlist) if fuzz_params else []
 
     connector = aiohttp.TCPConnector(ssl=cfg.verify_tls)
     async with aiohttp.ClientSession(
@@ -176,6 +232,8 @@ async def crawl(cfg: Config, start_url: str, *, max_depth: int, max_pages: int,
                 print(f"    [crawl] [{status}] {url}")
 
             _add(_query_candidates(final_url))
+            if param_names:
+                _add(_param_fuzz_candidates(final_url, param_names))
             if not body:
                 continue
 
@@ -190,8 +248,16 @@ async def crawl(cfg: Config, start_url: str, *, max_depth: int, max_pages: int,
                     _add(_query_candidates(cu))
 
             for form in parser.forms:
-                if _same_origin(start_url, form["url"]):
-                    _add(_form_candidates(form))
+                if not _same_origin(start_url, form["url"]):
+                    continue
+                _add(_form_candidates(form))
+                if form["file_field"]:
+                    uf = UploadForm(
+                        url=form["url"], method=form["method"] or "POST",
+                        file_field=form["file_field"],
+                        other_fields=[(n, v or "test") for n, v in form["fields"]],
+                    )
+                    upload_forms.setdefault((uf.url, uf.method, uf.file_field), uf)
 
             if depth < max_depth:
                 for link in parser.links:
@@ -199,4 +265,4 @@ async def crawl(cfg: Config, start_url: str, *, max_depth: int, max_pages: int,
                             and _strip_fragment(link) not in visited):
                         queue.append((link, depth + 1))
 
-    return sorted(candidates.values(), key=lambda c: (c.url, c.param))
+    return sorted(candidates.values(), key=lambda c: (c.url, c.param)), list(upload_forms.values())

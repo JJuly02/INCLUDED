@@ -39,6 +39,12 @@ class Finding:
 # Marker injected into RCE payloads to unambiguously confirm execution.
 RCE_MARKER = "INCLUDED_RCE_OK"
 
+
+def cmd_with_marker(cmd: str) -> str:
+    """Command that always emits RCE_MARKER (so check() can unambiguously
+    confirm execution) plus the real cfg.cmd output on Linux."""
+    return f"echo {RCE_MARKER}; {cmd}"
+
 _SIGNATURES: list[tuple[str, re.Pattern]] = [
     ("/etc/passwd", re.compile(r"root:.*?:0:0:")),
     ("/etc/shadow", re.compile(r"root:[*!$]")),
