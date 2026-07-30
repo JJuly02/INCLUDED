@@ -110,6 +110,53 @@ present in server-side code.
 included -u "http://host/" --no-fuzz-params --no-upload-chain -v
 ```
 
+### Example: discovery to RCE on a real vulnerable app
+
+Real shape of a vuln found in an authorized lab — a small PHP "consulting
+site" with a contact form and a job-application upload form. Host and flag
+below are placeholders; this is the pattern, not a specific box's answer.
+
+```bash
+# 1. auto-discovery: crawl the site, fuzz hidden params, find the upload form
+included -u "http://host/" -v
+```
+Crawling turns up `contact.php?region=...` (a query param not linked
+anywhere — only found via hidden-param fuzzing) and a job-application form
+that accepts a file upload.
+
+```bash
+# 2. confirm the LFI directly on the one candidate that matters
+included -w "http://host/contact.php?region=INCLUDE" -v
+```
+`region` gets `include()`d server-side behind a non-recursive
+`str_replace('../', '')` filter — bypassed by `....//` — with the result
+only reachable double-URL-encoded. Both are things `traversal` already
+tries by default (`-e all`, every non-recursive bypass sequence); no
+custom payload needed.
+
+```bash
+# 3. same command, aimed instead at the app's own image-serving endpoint
+included -w "http://host/api/image.php?p=INCLUDE" -v
+```
+This one also reads arbitrary files (`/etc/passwd` comes back) — but it's
+a **file-read** sink, not `include()`: trying to trigger a web shell
+through it confirms as `signal: php source` (the shell's own PHP source
+echoed back verbatim), never `signal: RCE marker`. Worth telling apart
+before chaining anything through it — `check()` in `detection.py` already
+distinguishes the two.
+
+```bash
+# 4. full auto chain: upload a web shell, guess where it landed, trigger
+#    it through region, and run a command once RCE is confirmed
+included -u "http://host/" --cmd "cat /flag_XXXX.txt"
+```
+No callback, no listener, no VPN required for this step — `--cmd` bakes
+the command into the uploaded shell, `region` triggers it via `include()`,
+and the output comes back in the normal HTTP response body, the same way
+`/etc/passwd` did in step 2. A true reverse shell (or the `rfi` module)
+would need a routable `--lhost`/`--lport` back to you; running one
+specific command through an already-confirmed RCE doesn't.
+
 ## Modules
 | module             | group | what it does                                          |
 |--------------------|-------|--------------------------------------------------------|

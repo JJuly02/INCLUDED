@@ -12,8 +12,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from ..detection import Finding
-from ..http_client import HttpClient
 from .base import BaseModule
 
 # Traversal sequences (a prefix that climbs one directory level).
@@ -33,9 +31,14 @@ class TraversalModule(BaseModule):
         return target.lstrip("/").replace("C:/", "").replace("c:/", "")
 
     def payloads(self) -> Iterator[str]:
-        """Full sweep (target x prefix x sequence x depth), no auto-stop —
-        used by --all-hits. Normally run() is overridden and stops at the
-        first hit per depth, see below.
+        """Full sweep: every target x approved-prefix x sequence x depth
+        (BaseModule.run() fans encoding out on top of this, and sends it
+        all concurrently — see BaseModule._run_concurrent). There used to
+        be a hand-written sequential run() here that stopped at the first
+        confirmed depth per (prefix, seq); it's gone because that only
+        saved requests on an already-vulnerable target, while making the
+        common case — nothing vulnerable, every depth tried anyway — fully
+        serial and, against a remote target, painfully slow.
         """
         for target in self.targets():
             rel = self._norm(target)
@@ -51,38 +54,7 @@ class TraversalModule(BaseModule):
                     for depth in range(1, self.cfg.max_depth + 1):
                         yield prefix + seq * depth + rel
 
-    async def run(self, client: HttpClient) -> list[Finding]:
-        """Auto depth-detection: for each (target, prefix, sequence)
-        combination, tries depths 1..max_depth increasing and stops at the
-        first confirmation — deeper attempts would hit anyway (excess ../
-        past root is usually safely clamped), so they're just extra noise
-        against the target. Disabled by --all-hits (which tests every
-        depth, as in payloads()).
-        """
-        if self.cfg.all_hits:
-            findings = [f async for f in self._run_all(client)]
-            return self.dedup(findings)
-
-        findings: list[Finding] = []
-        for target in self.targets():
-            rel = self._norm(target)
-
-            for payload in (target, "/" + rel):
-                finding = await self._send_eval(client, payload)
-                if finding.confirmed:
-                    findings.append(finding)
-
-            for prefix in _APPROVED_PREFIXES:
-                for seq in _SEQUENCES:
-                    for depth in range(1, self.cfg.max_depth + 1):
-                        finding = await self._send_eval(client, prefix + seq * depth + rel)
-                        if finding.confirmed:
-                            findings.append(finding)
-                            break  # deeper attempts for this (prefix, seq) are redundant
-        return self.dedup(findings)
-
-    async def _run_all(self, client: HttpClient):
-        for payload in self.payloads():
-            finding = await self._send_eval(client, payload)
-            if finding.confirmed:
-                yield finding
+    # run() is inherited from BaseModule: gathers every payload above
+    # concurrently (bounded by cfg.concurrency) and dedups the confirmed
+    # findings. --all-hits (dedup off) is now its only effect here, same
+    # as every other module — no more separate exhaustive-vs-smart split.
